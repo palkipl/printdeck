@@ -32,7 +32,8 @@ mkdir -p "$SUPPORT" "$AGENTS" "$HOME/Applications"
 if [ ! -f "$SUPPORT/config.json" ]; then
   OMNIIP=""
   if [ "$UPDATE" != 1 ]; then
-    read -rp "xTool O1 Omni IP address (press Enter to skip): " OMNIIP </dev/tty || true
+    echo "The Omni is detected over USB by default. Only type an IP if it's on Wi-Fi/Ethernet."
+    read -rp "Omni IP address (press Enter for USB): " OMNIIP </dev/tty || true
   fi
   cat > "$SUPPORT/config.json" <<EOF
 {
@@ -41,7 +42,8 @@ if [ ! -f "$SUPPORT/config.json" ]; then
   "window_match": "xTool",
   "fps": 2,
   "max_width": 1280,
-  "device_name": "xTool O1 Omni"
+  "device_name": "xTool O1 Omni",
+  "usb_match": "xtool"
 }
 EOF
   echo "-> Config saved to $SUPPORT/config.json"

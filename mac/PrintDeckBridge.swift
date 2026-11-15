@@ -6,6 +6,7 @@
 import Cocoa
 import ScreenCaptureKit
 import Network
+import IOKit
 
 // MARK: - Config ------------------------------------------------------------
 
@@ -16,6 +17,7 @@ struct BridgeConfig: Codable {
     var fps: Double?
     var max_width: Int?
     var device_name: String?
+    var usb_match: String?
 }
 
 let supportDir = FileManager.default.homeDirectoryForCurrentUser
@@ -32,6 +34,7 @@ let WINDOW_MATCH = (config.window_match ?? "xTool").lowercased()
 let FPS = max(0.5, min(config.fps ?? 2, 10))
 let MAX_WIDTH = config.max_width ?? 1280
 let DEVICE_NAME = config.device_name ?? "xTool O1 Omni"
+let USB_MATCH = (config.usb_match ?? "xtool").lowercased()
 let DISCOVERY_PORT: UInt16 = 47800
 let MAC_NAME = Host.current().localizedName ?? "Mac"
 let VERSION = (try? String(contentsOf: supportDir.appendingPathComponent("version"), encoding: .utf8))
@@ -46,6 +49,7 @@ struct Snapshot {
     var studioOpen = false
     var windowTitle = ""
     var omniOnline: Bool?
+    var usbName = ""
     var permission = true
     var lastError = ""
 }
@@ -130,6 +134,30 @@ final class Capturer {
     }
 }
 
+// MARK: - USB detection -----------------------------------------------------
+
+func usbProp(_ svc: io_object_t, _ key: String) -> String {
+    let v = IORegistryEntryCreateCFProperty(svc, key as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue()
+    return (v as? String) ?? ""
+}
+
+/// Every USB device plugged into the Mac: "Vendor Product"
+func listUSBDevices() -> [String] {
+    var out: [String] = []
+    var iter: io_iterator_t = 0
+    guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IOUSBHostDevice"), &iter) == KERN_SUCCESS
+    else { return out }
+    defer { IOObjectRelease(iter) }
+    while case let svc = IOIteratorNext(iter), svc != 0 {
+        let name = usbProp(svc, "USB Product Name")
+        let vendor = usbProp(svc, "USB Vendor Name")
+        IOObjectRelease(svc)
+        let full = [vendor, name].filter { !$0.isEmpty }.joined(separator: " ")
+        if !full.isEmpty { out.append(full) }
+    }
+    return out
+}
+
 // MARK: - Omni reachability -------------------------------------------------
 
 final class OmniChecker {
@@ -137,8 +165,14 @@ final class OmniChecker {
     private let ports: [NWEndpoint.Port] = [28900, 8080, 80, 443]
 
     func start() {
-        guard !OMNI_IP.isEmpty else { return }
-        q.async { self.check() }
+        if OMNI_IP.isEmpty { q.async { self.checkUSB() } }   // Omni plugged in by USB
+        else { q.async { self.check() } }                    // Omni on the network
+    }
+
+    private func checkUSB() {
+        let hit = listUSBDevices().first { $0.lowercased().contains(USB_MATCH) }
+        shared.update { $0.omniOnline = hit != nil; $0.usbName = hit ?? "" }
+        q.asyncAfter(deadline: .now() + 3) { self.checkUSB() }
     }
 
     private func check() {
@@ -206,11 +240,15 @@ func statusJSON() -> Data {
     let fresh = s.jpeg != nil && Date().timeIntervalSince(s.lastFrame) < 10
     var state = "Online", color = "good"
     if !s.permission { state = "Needs permission"; color = "bad" }
-    else if s.omniOnline == false { state = "Omni offline"; color = "bad" }
+    else if s.omniOnline == false { state = OMNI_IP.isEmpty ? "Omni unplugged" : "Omni offline"; color = "bad" }
     else if !s.studioOpen { state = "Studio closed"; color = "warn" }
 
     var fields: [[String]] = []
-    if !OMNI_IP.isEmpty {
+    if OMNI_IP.isEmpty {
+        let o = s.omniOnline.map { $0 ? "Connected" : "Not plugged in" } ?? "Checking…"
+        fields.append(["Omni USB", o])
+        if !s.usbName.isEmpty { fields.append(["Device", s.usbName]) }
+    } else {
         let o = s.omniOnline.map { $0 ? "Online" : "Offline" } ?? "Checking…"
         fields.append(["Omni", o])
         fields.append(["Omni IP", OMNI_IP])
@@ -293,6 +331,9 @@ func handle(_ c: NWConnection) {
         case "/snapshot.jpg":
             if let j = shared.get().jpeg { respond(c, "200 OK", "image/jpeg", j) }
             else { respond(c, "404 Not Found", "text/plain", Data("no frame".utf8)) }
+        case "/usb.json":
+            let body = (try? JSONSerialization.data(withJSONObject: listUSBDevices(), options: .prettyPrinted)) ?? Data("[]".utf8)
+            respond(c, "200 OK", "application/json", body)
         case "/": respond(c, "200 OK", "text/html; charset=utf-8", Data(previewHTML.utf8))
         default: respond(c, "404 Not Found", "text/plain", Data("not found".utf8))
         }
@@ -338,6 +379,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
         menu.addItem(item("Open Preview", #selector(openPreview)))
         menu.addItem(item("Screen Recording Settings…", #selector(openPrivacy)))
+        menu.addItem(item("Show USB Devices", #selector(openUSB)))
         menu.addItem(item("Open Config Folder", #selector(openConfig)))
         menu.addItem(.separator())
         menu.addItem(item("Quit", #selector(quit), key: "q"))
@@ -363,7 +405,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !s.permission { statusLine.title = "⚠️ Needs Screen Recording permission" }
         else if s.studioOpen { statusLine.title = "● Streaming xTool Studio on port \(HTTP_PORT)" }
         else { statusLine.title = "○ xTool Studio not open" }
-        if OMNI_IP.isEmpty { omniLine.title = "Omni IP not set (see config)" }
+        if OMNI_IP.isEmpty {
+            omniLine.title = "Omni USB: " + (s.omniOnline.map { $0 ? "connected (\(s.usbName))" : "not found" } ?? "checking…")
+        }
         else { omniLine.title = "Omni \(OMNI_IP): " + (s.omniOnline.map { $0 ? "online" : "offline" } ?? "checking…") }
     }
 
@@ -371,6 +415,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func openPrivacy() {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
     }
+    @objc func openUSB() { NSWorkspace.shared.open(URL(string: "http://localhost:\(HTTP_PORT)/usb.json")!) }
     @objc func openConfig() { NSWorkspace.shared.open(supportDir) }
     @objc func quit() { NSApp.terminate(nil) }
 }

@@ -3,7 +3,7 @@
 Full-screen dashboard for a **Creality K2 Combo** and an **xTool O1 Omni**.
 
 - **Raspberry Pi** (`pi/`): web server + full-screen app on boot. Shows the K2's live camera, print thumbnail, progress, layers, ETA, temps, fans, speed mode, LED and CFS filament, plus the Omni panel.
-- **Mac** (`mac/`): *PrintDeck Bridge*, a menu-bar app that starts at login, streams the xTool Studio window, checks the Omni is online, and is found by the Pi automatically.
+- **Mac** (`mac/`): *PrintDeck Bridge*, a menu-bar app that starts at login, streams the xTool Studio window, checks the Omni is plugged in over USB, and is found by the Pi automatically.
 
 Both sides **auto-update from this repo every 30 minutes**.
 
