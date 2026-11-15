@@ -6,9 +6,6 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 pgrep -f "printdeck_app.py" >/dev/null && { python3 "$DIR/app/printdeck_app.py" & exit 0; }  # focus existing window
 
-# PrintDeck wallpaper behind everything (covers the moment before the app opens)
-command -v pcmanfm >/dev/null && pcmanfm --set-wallpaper="$DIR/branding/wallpaper.png" --wallpaper-mode=fit >/dev/null 2>&1 &
-
 if [ -n "$DISPLAY" ] && command -v xset >/dev/null; then
   xset s off; xset -dpms; xset s noblank
 fi
