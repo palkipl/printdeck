@@ -43,8 +43,10 @@ if [ $UPDATE = 0 ] || [ ! -x "$DIR/go2rtc" ]; then
     aarch64) GARCH=arm64 ;; armv7l) GARCH=arm ;; armv6l) GARCH=armv6 ;; x86_64) GARCH=amd64 ;;
     *) echo "Unknown CPU $(uname -m)"; exit 1 ;;
   esac
-  curl -fL -o "$DIR/go2rtc" "https://github.com/AlexxIT/go2rtc/releases/latest/download/go2rtc_linux_$GARCH"
-  chmod +x "$DIR/go2rtc"
+  # Download to a temp file and swap it in - works even while go2rtc is running
+  curl -fL -o "$DIR/go2rtc.new" "https://github.com/AlexxIT/go2rtc/releases/latest/download/go2rtc_linux_$GARCH"
+  chmod +x "$DIR/go2rtc.new"
+  mv -f "$DIR/go2rtc.new" "$DIR/go2rtc"
 fi
 cat > "$DIR/go2rtc.yaml" <<EOF
 api:
