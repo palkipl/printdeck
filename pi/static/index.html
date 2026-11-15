@@ -284,7 +284,7 @@ function renderK2(k2, cfg){
   chip.className = "chip " + (k2.connected ? (st[1] || "ok") : "bad");
   chip.innerHTML = `<i></i>K2 · ${k2.connected ? st[0] : "offline"}`;
   $("k2-state").className = "chip " + st[1]; $("k2-state").textContent = k2.connected ? st[0] : "Offline";
-  if (r.model) $("k2-name").textContent = `Creality ${r.model}`;
+  $("k2-name").textContent = cfg.k2_name || "Creality K2 Combo";
   $("k2-ip").textContent = cfg.k2_ip || "";
 
   if (k2.connected && camLoaded !== cfg.camera_mode){

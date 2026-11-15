@@ -46,6 +46,7 @@ STATE = {
         "camera_mode": CFG.get("camera_mode", "webrtc"),
         "go2rtc_port": int(CFG.get("go2rtc_port", 1984)),
         "k2_ip": K2_IP,
+        "k2_name": CFG.get("k2_name", "Creality K2 Combo"),
     },
 }
 THUMB = {"png": None, "file": None, "fetched": 0}
