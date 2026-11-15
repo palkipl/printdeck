@@ -29,3 +29,6 @@ curl -fsSL https://raw.githubusercontent.com/palkipl/printdeck/main/mac/install.
 - Settings: `~/Library/Application Support/PrintDeck/config.json`
 - Preview: `http://localhost:8765` · Logs: `~/Library/Application Support/PrintDeck/*.log`
 - Uninstall: `bash ~/Library/Application\ Support/PrintDeck/uninstall.sh`
+
+### Boot order (Raspberry Pi OS)
+PrintDeck starts before the desktop: the installer edits `/etc/xdg/labwc/autostart` so the PrintDeck wallpaper and app start first and the desktop/taskbar start 25 s later behind it. The original file is kept at `/etc/xdg/labwc/autostart.printdeck-orig` — copy it back to undo.

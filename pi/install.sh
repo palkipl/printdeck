@@ -28,6 +28,7 @@ K2IP="$(python3 -c "import json;print(json.load(open('$DIR/config.json'))['k2_ip
 # ---------- packages (also checked on auto-update, installs only what's missing) ----------
 PKGS="python3-aiohttp curl python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 \
       gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav"
+[ -d /etc/xdg/labwc ] && PKGS="$PKGS swaybg"   # instant PrintDeck wallpaper at login
 MISSING=""
 for p in $PKGS; do dpkg -s "$p" >/dev/null 2>&1 || MISSING="$MISSING $p"; done
 if [ -n "$MISSING" ]; then
@@ -133,8 +134,24 @@ rm -f "$HOME/Desktop/printdeck.desktop"   # menu entry only (Menu > Accessories/
 
 rm -f "$HOME/.config/autostart/printdeck-kiosk.desktop"   # old v1 launcher
 if [ -d /etc/xdg/labwc ]; then
-  mkdir -p "$HOME/.config/labwc"; touch "$HOME/.config/labwc/autostart"
-  grep -q "$DIR/kiosk.sh" "$HOME/.config/labwc/autostart" || echo "$DIR/kiosk.sh &" >> "$HOME/.config/labwc/autostart"
+  # Raspberry Pi OS (labwc): the desktop + taskbar start from the system autostart file,
+  # so put PrintDeck first there and start the desktop 25 s later (behind the full-screen app).
+  SYS=/etc/xdg/labwc/autostart
+  if [ -f "$SYS" ]; then
+    [ -f "$SYS.printdeck-orig" ] || $SUDO cp "$SYS" "$SYS.printdeck-orig"
+    {
+      echo "# --- PrintDeck (managed by ~/printdeck/install.sh; original: $SYS.printdeck-orig) ---"
+      echo "command -v swaybg >/dev/null && swaybg -c '#07090d' -i '$DIR/branding/wallpaper.png' -m fit >/dev/null 2>&1 &"
+      echo "'$DIR/kiosk.sh' >/dev/null 2>&1 &"
+      echo "# --- desktop + taskbar, delayed so they never flash before PrintDeck ---"
+      awk '/pcmanfm|wf-panel-pi/ { sub(/[ \t]*&[ \t]*$/, ""); print "(sleep 25; " $0 ") &"; next } { print }' "$SYS.printdeck-orig"
+    } | $SUDO tee "$SYS.new" >/dev/null && $SUDO mv "$SYS.new" "$SYS"
+  fi
+  # Old setups launched PrintDeck from the user autostart file - remove that so it doesn't start twice
+  if [ -f "$HOME/.config/labwc/autostart" ]; then
+    sed -i "\#$DIR/kiosk.sh#d" "$HOME/.config/labwc/autostart"
+    [ -s "$HOME/.config/labwc/autostart" ] || rm -f "$HOME/.config/labwc/autostart"
+  fi
 else
   mkdir -p "$HOME/.config/autostart"
   cp "$HOME/.local/share/applications/printdeck.desktop" "$HOME/.config/autostart/printdeck.desktop"
