@@ -25,15 +25,15 @@ else
 fi
 K2IP="$(python3 -c "import json;print(json.load(open('$DIR/config.json'))['k2_ip'])")"
 
-# ---------- packages (first install only) ----------
-if [ $UPDATE = 0 ]; then
-  echo "-> Installing packages"
-  sudo apt-get update
-  sudo apt-get install -y python3-aiohttp curl
-  if ! command -v chromium >/dev/null && ! command -v chromium-browser >/dev/null; then
-    sudo apt-get install -y chromium || sudo apt-get install -y chromium-browser
-  fi
-  sudo apt-get install -y unclutter || true
+# ---------- packages (also checked on auto-update, installs only what's missing) ----------
+PKGS="python3-aiohttp curl python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 \
+      gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav"
+MISSING=""
+for p in $PKGS; do dpkg -s "$p" >/dev/null 2>&1 || MISSING="$MISSING $p"; done
+if [ -n "$MISSING" ]; then
+  echo "-> Installing:$MISSING"
+  $SUDO apt-get update -q
+  $SUDO apt-get install -y $MISSING
 fi
 
 # ---------- go2rtc ----------
@@ -124,6 +124,7 @@ Type=Application
 Name=PrintDeck
 Comment=3D printer dashboard
 Exec=$DIR/kiosk.sh
+StartupWMClass=printdeck
 Icon=$DIR/branding/icon.png
 Categories=Utility;
 Terminal=false

@@ -1,29 +1,28 @@
 #!/usr/bin/env bash
-# Opens PrintDeck full screen. Runs at login and from the PrintDeck app icon.
-# Shows a PrintDeck loading screen right away, then switches to the dashboard.
-# Alt+F4 exits to the desktop; it only relaunches by itself if Chromium crashes.
+# Starts the PrintDeck app full screen. Runs at login and from Menu > PrintDeck.
+# In the app: Esc = leave full screen, F11 = full screen, Ctrl+Q = quit.
+# It only relaunches by itself if it crashes.
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-URL="file://$DIR/static/loading.html"
 
-pgrep -f "printdeck/static/loading.html" >/dev/null && exit 0   # already open
+pgrep -f "printdeck_app.py" >/dev/null && { python3 "$DIR/app/printdeck_app.py" & exit 0; }  # focus existing window
 
-# PrintDeck wallpaper behind everything (covers the gap before the browser opens)
+# PrintDeck wallpaper behind everything (covers the moment before the app opens)
 command -v pcmanfm >/dev/null && pcmanfm --set-wallpaper="$DIR/branding/wallpaper.png" --wallpaper-mode=fit >/dev/null 2>&1 &
 
 if [ -n "$DISPLAY" ] && command -v xset >/dev/null; then
   xset s off; xset -dpms; xset s noblank
-  command -v unclutter >/dev/null && ! pgrep -x unclutter >/dev/null && unclutter -idle 0.5 -root &
 fi
 
-BROWSER="$(command -v chromium || command -v chromium-browser)"
-while true; do
-  "$BROWSER" --kiosk --noerrdialogs --disable-infobars --incognito \
-    --no-first-run --disable-session-crashed-bubble --disable-features=Translate \
-    --autoplay-policy=no-user-gesture-required --check-for-update-interval=31536000 \
-    --allow-file-access-from-files --default-background-color=ff07090d \
-    --password-store=basic --disable-extensions --disable-sync --disable-background-networking \
-    --disable-component-update --no-default-browser-check --disable-gpu-shader-disk-cache \
-    "$URL"
-  [ $? -eq 0 ] && break    # closed on purpose
-  sleep 3                  # crashed -> reopen
-done
+if python3 -c "import gi; gi.require_version('WebKit2','4.1')" 2>/dev/null; then
+  while true; do
+    python3 "$DIR/app/printdeck_app.py"
+    [ $? -eq 0 ] && break    # quit on purpose (Ctrl+Q / close)
+    sleep 3                  # crashed -> reopen
+  done
+else
+  # Fallback if the app's WebKit package is missing
+  BROWSER="$(command -v chromium || command -v chromium-browser)"
+  exec "$BROWSER" --kiosk --noerrdialogs --disable-infobars --incognito --no-first-run \
+    --password-store=basic --allow-file-access-from-files --autoplay-policy=no-user-gesture-required \
+    "file://$DIR/static/loading.html"
+fi
