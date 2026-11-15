@@ -16,6 +16,7 @@ curl -fsSL https://raw.githubusercontent.com/palkipl/printdeck/main/setup.sh | b
 - Open from any PC: `http://<pi-ip>:5000` (in Chrome: ⋮ → Cast, save and share → *Install page as app*)
 - On the Pi: the PrintDeck app (GTK + WebKit, no Chromium) starts full screen at login. **Esc** = leave full screen, **F11** = full screen, **Ctrl+Q** = quit, Menu → **PrintDeck** reopens it
 - Settings: `~/printdeck/config.json`, then `sudo systemctl restart printdeck`
+- Fan animation speed: `"fan_animation": "slow"` (or `"slower"`, `"off"`) in `~/printdeck/config.json`
 - Logs: `journalctl -u printdeck -f` · Update now: `bash ~/printdeck/update.sh`
 - All raw K2 data: `http://<pi-ip>:5000/api/raw`
 

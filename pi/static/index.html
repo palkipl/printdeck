@@ -106,11 +106,11 @@
   .tbar div{height:100%;width:0;border-radius:99px;transition:width .8s}
 
   .fan{display:flex;align-items:center;gap:.6vw}
-  .fan svg{width:5vh;height:5vh;flex:0 0 auto}
+  .fanico{position:relative;width:5vh;height:5vh;flex:0 0 auto;display:block}
+  .fanico svg{position:absolute;inset:0;width:100%;height:100%}
+  .fanico img{position:absolute;left:18%;top:18%;width:64%;height:64%;border-radius:50%}
   .fan .fv{font-size:2vh;font-weight:750;line-height:1}
   .fan .fl{font-size:1.3vh;color:var(--dim)}
-  .spin{transform-origin:50% 50%;animation:spin linear infinite;will-change:transform}
-  @keyframes spin{to{transform:rotate(360deg)}}
 
   .speed{display:flex;flex-direction:column;gap:.6vh}
   .speed .mode{font-size:2.4vh;font-weight:800}
@@ -255,16 +255,17 @@ function setTemp(id, cur, tgt, max){
   $("b-"+id).style.width = cur === null ? "0" : Math.min(100, cur / (tgt || max) * 100) + "%";
 }
 
-function fanSVG(pct, col){
+// Fan icon = static progress ring (SVG) + spinning GIF in the middle.
+// GIFs are cheap for the Pi 3 and the speed is set by "fan_animation" in config.json.
+let FAN_ANIM = "slow";
+function fanSVG(pct, col, name){
   const dash = 2*Math.PI*20, off = dash * (1 - pct/100);
-  const speed = pct > 0 ? (2.2 - pct/60).toFixed(2) : 0;
-  return `<svg viewBox="0 0 50 50">
+  const gif = pct <= 0 ? "off" : FAN_ANIM === "off" ? `${name}_still` : `${name}_${FAN_ANIM}`;
+  return `<span class="fanico"><svg viewBox="0 0 50 50">
     <circle cx="25" cy="25" r="20" fill="none" stroke="#171c27" stroke-width="4"/>
     <circle cx="25" cy="25" r="20" fill="none" stroke="${col}" stroke-width="4" stroke-linecap="round"
-      stroke-dasharray="${dash}" stroke-dashoffset="${off}" transform="rotate(-90 25 25)"/>
-    <g class="${pct>0?"spin":""}" style="animation-duration:${speed}s">
-      ${[0,120,240].map(a=>`<ellipse cx="25" cy="17.5" rx="3.6" ry="6.5" fill="${pct>0?col:"#3a4357"}" transform="rotate(${a} 25 25)"/>`).join("")}
-    </g><circle cx="25" cy="25" r="2.6" fill="#eef1f7"/></svg>`;
+      stroke-dasharray="${dash}" stroke-dashoffset="${off}" transform="rotate(-90 25 25)"/></svg>
+    <img src="/static/fans/${gif}.gif" alt=""></span>`;
 }
 
 function speedMode(p){
@@ -356,11 +357,12 @@ function renderK2(k2, cfg){
   setTemp("bed", r.bedTemp0, r.targetBedTemp0, 110);
   setTemp("box", r.boxTemp, r.targetBoxTemp, 60);
 
-  const fans = [["Model", pick(r,"modelFanPct","fan0Pct"), "#36d6a0"],
-                ["Case",  pick(r,"caseFanPct","fan2Pct"), "#5cc8ff"],
-                ["Side",  pick(r,"auxiliaryFanPct","sideFanPct","fan1Pct"), "#a98bff"]];
-  setHTML("fans", fans.map(([n, v, c]) => { const p = Math.round(num(v) ?? 0);
-    return `<div class="fan">${fanSVG(p, c)}<div><div class="fv num">${v === undefined ? "—" : p+"%"}</div><div class="fl">${n}</div></div></div>`; }).join(""));
+  FAN_ANIM = cfg.fan_animation || "slow";
+  const fans = [["Model", pick(r,"modelFanPct","fan0Pct"), "#36d6a0", "green"],
+                ["Case",  pick(r,"caseFanPct","fan2Pct"), "#5cc8ff", "blue"],
+                ["Side",  pick(r,"auxiliaryFanPct","sideFanPct","fan1Pct"), "#a98bff", "purple"]];
+  setHTML("fans", fans.map(([n, v, c, g]) => { const p = Math.round(num(v) ?? 0);
+    return `<div class="fan">${fanSVG(p, c, g)}<div><div class="fv num">${v === undefined ? "—" : p+"%"}</div><div class="fl">${n}</div></div></div>`; }).join(""));
 
   const [mode, sub] = speedMode(pick(r, "curFeedratePct", "speedPct"));
   $("spd-mode").textContent = mode;
