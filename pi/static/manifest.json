@@ -1,0 +1,9 @@
+{
+  "name": "PrintDeck",
+  "short_name": "PrintDeck",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07090d",
+  "theme_color": "#07090d",
+  "icons": [{ "src": "/static/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

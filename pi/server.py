@@ -13,6 +13,7 @@ import os
 import socket
 import ssl
 import time
+import uuid
 
 from aiohttp import ClientSession, ClientTimeout, WSMsgType, web
 
@@ -28,7 +29,17 @@ DASH_PORT = int(CFG.get("dashboard_port", 5000))
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("printdeck")
 
+def _read_version():
+    try:
+        with open(os.path.join(BASE, ".version")) as f:
+            return f.read().strip()[:7]
+    except OSError:
+        return "dev"
+
+
 STATE = {
+    "boot_id": uuid.uuid4().hex,
+    "version": _read_version(),
     "k2": {"connected": False, "last_rx": 0, "raw": {}, "thumb_ver": 0},
     "omni": {"connected": False, "bridge": None, "status": {}, "last_rx": 0},
     "config": {
@@ -201,6 +212,11 @@ async def api_state(request):
     return web.json_response(STATE, headers={"Cache-Control": "no-store"})
 
 
+async def api_raw(request):
+    """Everything the K2 has sent - handy for debugging field names."""
+    return web.json_response(STATE["k2"]["raw"], dumps=lambda o: json.dumps(o, indent=2, sort_keys=True))
+
+
 async def api_thumb(request):
     if not THUMB["png"]:
         raise web.HTTPNotFound()
@@ -223,6 +239,7 @@ def main():
     app.router.add_get("/", index)
     app.router.add_get("/api/state", api_state)
     app.router.add_get("/api/thumb.png", api_thumb)
+    app.router.add_get("/api/raw", api_raw)
     app.router.add_static("/static/", os.path.join(BASE, "static"))
     app.on_startup.append(on_startup)
     web.run_app(app, host="0.0.0.0", port=DASH_PORT, print=None)

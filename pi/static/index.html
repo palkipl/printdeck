@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PrintDeck</title>
+<link rel="manifest" href="/static/manifest.json">
+<link rel="icon" href="/static/icon.svg">
+<meta name="theme-color" content="#07090d">
+<style>
+  :root{
+    --bg:#07090d; --panel:#10141c; --panel2:#171c27; --line:#222a39;
+    --text:#eef1f7; --dim:#7d879c; --faint:#3a4357;
+    --k2:#36d6a0; --k2b:#1aa37a; --omni:#a98bff; --hot:#ff7a45; --bed:#ffb547;
+    --box:#5cc8ff; --bad:#ff5d6c; --warn:#ffb547;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);color:var(--text);
+    font-family:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+  body.kiosk,body.kiosk *{cursor:none!important}
+  body{display:grid;grid-template-rows:auto 1fr auto;height:100vh;padding:1.4vh 1.2vw;gap:1.2vh}
+  .num{font-variant-numeric:tabular-nums}
+
+  /* ---------- top bar ---------- */
+  .top{display:flex;align-items:center;gap:1.2vw}
+  .logo{font-weight:800;font-size:2.5vh;letter-spacing:-.02em}
+  .logo b{color:var(--k2)}
+  .chip{font-size:1.5vh;font-weight:600;padding:.45vh .9vw;border-radius:99px;background:var(--panel2);
+    color:var(--dim);display:inline-flex;align-items:center;gap:.5vw;white-space:nowrap}
+  .chip i{width:.9vh;height:.9vh;border-radius:50%;background:currentColor;display:block}
+  .chip.ok{color:var(--k2)} .chip.warn{color:var(--warn)} .chip.bad{color:var(--bad)} .chip.omni{color:var(--omni)}
+  .spacer{flex:1}
+  .clock{font-size:2.6vh;font-weight:700} .date{font-size:1.5vh;color:var(--dim);text-align:right}
+
+  /* ---------- main grid ---------- */
+  main{display:grid;grid-template-columns:1.55fr 1fr 0.95fr;gap:1.2vw;min-height:0}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:1.6vh;min-height:0;overflow:hidden;
+    display:flex;flex-direction:column}
+  .ptitle{display:flex;align-items:center;justify-content:space-between;padding:1vh 1vw;font-size:1.6vh;
+    color:var(--dim);font-weight:600;text-transform:uppercase;letter-spacing:.08em}
+  .ptitle strong{color:var(--text);text-transform:none;letter-spacing:0;font-size:1.9vh}
+
+  .cam{position:relative;flex:1;background:#000;min-height:0}
+  .cam iframe,.cam img{position:absolute;inset:0;width:100%;height:100%;border:0;object-fit:contain}
+  .cam .msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    color:var(--dim);font-size:1.8vh;text-align:center;padding:2vh}
+  .cam .badge{position:absolute;left:1vw;top:1.2vh;z-index:2;background:#000a;backdrop-filter:blur(6px);
+    padding:.5vh .8vw;border-radius:99px;font-size:1.4vh;font-weight:700;display:flex;gap:.5vw;align-items:center}
+  .cam .badge i{width:.9vh;height:.9vh;border-radius:50%;background:var(--bad);animation:pulse 1.6s infinite}
+  @keyframes pulse{50%{opacity:.25}}
+
+  /* ---------- job panel ---------- */
+  .job{padding:0 1vw 1.2vh;display:flex;flex-direction:column;gap:1.2vh;flex:1;min-height:0}
+  .hero{display:grid;grid-template-columns:auto 1fr;gap:1vw;align-items:center}
+  .ring{position:relative;width:17vh;height:17vh}
+  .ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+  .ring .val{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .ring .val b{font-size:4.2vh;font-weight:800;line-height:1}
+  .ring .val span{font-size:1.4vh;color:var(--dim);margin-top:.4vh}
+  .thumb{width:100%;aspect-ratio:1;max-height:17vh;border-radius:1.2vh;overflow:hidden;
+    background:radial-gradient(circle at 50% 40%,#1d2534,#0d1118);display:flex;align-items:center;justify-content:center}
+  .thumb img{width:100%;height:100%;object-fit:contain}
+  .thumb span{font-size:1.4vh;color:var(--faint)}
+  .fname{font-size:2vh;font-weight:700;line-height:1.25;overflow:hidden;display:-webkit-box;
+    -webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-all}
+  .kv{display:grid;grid-template-columns:1fr 1fr;gap:.8vh .8vw}
+  .kv div{background:var(--panel2);border-radius:1vh;padding:.8vh .8vw;min-width:0}
+  .kv .l{font-size:1.3vh;color:var(--dim);text-transform:uppercase;letter-spacing:.07em}
+  .kv .v{font-size:2.2vh;font-weight:700;margin-top:.2vh;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .layers{height:.9vh;border-radius:99px;background:var(--panel2);overflow:hidden}
+  .layers div{height:100%;width:0;background:linear-gradient(90deg,var(--k2b),var(--k2));transition:width .8s}
+
+  /* ---------- omni ---------- */
+  .omni .cam{flex:0 0 auto;aspect-ratio:4/3}
+  .ofields{padding:1vh 1vw;display:flex;flex-direction:column;gap:.8vh;overflow:hidden}
+  .ofields .row{display:flex;justify-content:space-between;gap:1vw;font-size:1.7vh;padding:.7vh .8vw;
+    background:var(--panel2);border-radius:1vh}
+  .ofields .row span{color:var(--dim)} .ofields .row b{font-weight:650;text-align:right;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .otitle{font-size:2vh;font-weight:700;padding:1vh 1vw 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .obar{margin:0 1vw;height:.9vh;border-radius:99px;background:var(--panel2);overflow:hidden}
+  .obar div{height:100%;width:0;background:var(--omni);transition:width .8s}
+
+  /* ---------- bottom strip ---------- */
+  .strip{display:grid;grid-template-columns:1.5fr 1.35fr .9fr 1.5fr;gap:1.2vw}
+  .group{background:var(--panel);border:1px solid var(--line);border-radius:1.6vh;padding:1vh 1vw;
+    display:flex;flex-direction:column;gap:.8vh;min-width:0}
+  .group h4{font-size:1.3vh;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;font-weight:600}
+  .row3{display:grid;grid-template-columns:repeat(3,1fr);gap:.8vw}
+
+  .temp .cur{font-size:2.8vh;font-weight:800;line-height:1}
+  .temp .cur small{font-size:1.5vh;color:var(--dim);font-weight:600}
+  .temp .lab{font-size:1.3vh;color:var(--dim);margin-top:.3vh;display:flex;justify-content:space-between}
+  .tbar{height:.6vh;border-radius:99px;background:var(--panel2);margin-top:.6vh;overflow:hidden}
+  .tbar div{height:100%;width:0;border-radius:99px;transition:width .8s}
+
+  .fan{display:flex;align-items:center;gap:.6vw}
+  .fan svg{width:5vh;height:5vh;flex:0 0 auto}
+  .fan .fv{font-size:2vh;font-weight:750;line-height:1}
+  .fan .fl{font-size:1.3vh;color:var(--dim)}
+  .spin{transform-origin:50% 50%;animation:spin linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .speed{display:flex;flex-direction:column;gap:.6vh}
+  .speed .mode{font-size:2.4vh;font-weight:800}
+  .speed .sub{font-size:1.4vh;color:var(--dim)}
+  .led{display:flex;align-items:center;gap:.5vw;font-size:1.5vh;color:var(--dim);margin-top:auto}
+  .led i{width:1.4vh;height:1.4vh;border-radius:50%;background:var(--faint)}
+  .led.on i{background:#ffe27a;box-shadow:0 0 1.2vh #ffe27a}
+  .led.on{color:var(--text)}
+
+  .spools{display:flex;gap:.8vw;align-items:flex-end;flex:1}
+  .spool{flex:1;display:flex;flex-direction:column;align-items:center;gap:.4vh;min-width:0;
+    padding:.6vh 0;border-radius:1vh}
+  .spool.active{background:var(--panel2);outline:1px solid var(--k2)}
+  .spool .disc{width:4.6vh;height:4.6vh;border-radius:50%;position:relative;
+    box-shadow:inset 0 0 0 .5vh #0006, 0 0 0 1px #fff2}
+  .spool .disc::after{content:"";position:absolute;inset:35%;border-radius:50%;background:var(--panel)}
+  .spool .disc.empty{background:repeating-conic-gradient(var(--faint) 0 10deg,transparent 10deg 20deg)}
+  .spool .id{font-size:1.3vh;color:var(--dim);font-weight:700}
+  .spool .ty{font-size:1.5vh;font-weight:650}
+  .muted{color:var(--dim);font-size:1.5vh}
+  .hidden{display:none!important}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="logo">Print<b>Deck</b></div>
+  <span class="chip" id="k2-chip"><i></i>K2 connecting…</span>
+  <span class="chip" id="omni-chip"><i></i>Omni waiting…</span>
+  <div class="spacer"></div>
+  <div><div class="clock num" id="clock">--:--</div><div class="date" id="date"></div></div>
+</div>
+
+<main>
+  <!-- K2 camera -->
+  <section class="panel">
+    <div class="ptitle"><strong id="k2-name">Creality K2 Combo</strong><span class="num" id="k2-ip"></span></div>
+    <div class="cam" id="k2-cam"><div class="msg">Waiting for camera…</div></div>
+  </section>
+
+  <!-- K2 job -->
+  <section class="panel">
+    <div class="ptitle"><span>Current print</span><span id="k2-state" class="chip">—</span></div>
+    <div class="job">
+      <div class="hero">
+        <div class="ring">
+          <svg viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="44" fill="none" stroke="#171c27" stroke-width="9"/>
+            <circle id="ring" cx="50" cy="50" r="44" fill="none" stroke="url(#g)" stroke-width="9"
+              stroke-linecap="round" stroke-dasharray="276.5" stroke-dashoffset="276.5"
+              style="transition:stroke-dashoffset .8s"/>
+            <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#1aa37a"/><stop offset="1" stop-color="#7ff0c8"/></linearGradient></defs>
+          </svg>
+          <div class="val"><b class="num" id="pct">0%</b><span id="ring-sub">idle</span></div>
+        </div>
+        <div class="thumb" id="thumb"><span>No preview</span></div>
+      </div>
+      <div class="fname" id="fname">Nothing printing</div>
+      <div>
+        <div class="muted num" id="layer-txt" style="display:flex;justify-content:space-between">
+          <span>Layer —</span><span></span></div>
+        <div class="layers" style="margin-top:.5vh"><div id="layer-bar"></div></div>
+      </div>
+      <div class="kv">
+        <div><div class="l">Time left</div><div class="v num" id="left">—</div></div>
+        <div><div class="l">Finishes</div><div class="v num" id="eta">—</div></div>
+        <div><div class="l">Elapsed</div><div class="v num" id="elap">—</div></div>
+        <div><div class="l">Filament</div><div class="v num" id="weight">—</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Omni -->
+  <section class="panel omni">
+    <div class="ptitle"><strong id="omni-name">xTool O1 Omni</strong><span class="chip" id="omni-state">—</span></div>
+    <div class="cam">
+      <div class="msg" id="omni-msg">Start PrintDeck Bridge on your Mac</div>
+      <img id="omni-img" class="hidden" alt="">
+    </div>
+    <div class="otitle" id="omni-title"></div>
+    <div class="obar hidden" id="omni-barwrap" style="margin-top:.8vh"><div id="omni-bar"></div></div>
+    <div class="ofields" id="omni-fields"></div>
+  </section>
+</main>
+
+<!-- bottom strip -->
+<div class="strip">
+  <div class="group">
+    <h4>Temperatures</h4>
+    <div class="row3">
+      <div class="temp"><div class="cur num" id="t-noz">—</div><div class="lab"><span>Nozzle</span><span id="t-noz-t"></span></div><div class="tbar"><div id="b-noz" style="background:var(--hot)"></div></div></div>
+      <div class="temp"><div class="cur num" id="t-bed">—</div><div class="lab"><span>Bed</span><span id="t-bed-t"></span></div><div class="tbar"><div id="b-bed" style="background:var(--bed)"></div></div></div>
+      <div class="temp"><div class="cur num" id="t-box">—</div><div class="lab"><span>Chamber</span><span id="t-box-t"></span></div><div class="tbar"><div id="b-box" style="background:var(--box)"></div></div></div>
+    </div>
+  </div>
+  <div class="group">
+    <h4>Fans</h4>
+    <div class="row3" id="fans"></div>
+  </div>
+  <div class="group speed">
+    <h4>Speed</h4>
+    <div class="mode" id="spd-mode">—</div>
+    <div class="sub num" id="spd-sub"></div>
+    <div class="led" id="led"><i></i><span>LED</span></div>
+  </div>
+  <div class="group">
+    <h4>Filament</h4>
+    <div class="spools" id="spools"><span class="muted">No CFS data yet</span></div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+if (new URLSearchParams(location.search).has("kiosk")) document.body.classList.add("kiosk");
+
+const STATES = {0:["Idle",""],1:["Printing","ok"],2:["Complete","ok"],3:["Failed","bad"],4:["Stopped","warn"],5:["Paused","warn"]};
+let camLoaded = null, thumbVer = -1, omniStream = null, bootId = null;
+
+const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+const pick = (r, ...keys) => { for (const k of keys) if (r[k] !== undefined && r[k] !== "") return r[k]; return undefined; };
+function dur(s){ s = num(s); if (s === null || s < 0) return "—";
+  const d = Math.floor(s/86400), h = Math.floor(s%86400/3600), m = Math.floor(s%3600/60);
+  return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m`; }
+function color(c){ if (!c) return null; c = String(c).replace("#",""); return c.length >= 6 ? "#" + c.slice(-6) : null; }
+function esc(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+function setTemp(id, cur, tgt, max){
+  cur = num(cur); tgt = num(tgt);
+  $("t-"+id).innerHTML = cur === null ? "—" : `${cur.toFixed(0)}<small>°C</small>`;
+  $("t-"+id+"-t").textContent = tgt ? `→ ${tgt.toFixed(0)}°` : "off";
+  $("b-"+id).style.width = cur === null ? "0" : Math.min(100, cur / (tgt || max) * 100) + "%";
+}
+
+function fanSVG(pct, col){
+  const dash = 2*Math.PI*20, off = dash * (1 - pct/100);
+  const speed = pct > 0 ? (2.2 - pct/60).toFixed(2) : 0;
+  return `<svg viewBox="0 0 50 50">
+    <circle cx="25" cy="25" r="20" fill="none" stroke="#171c27" stroke-width="4"/>
+    <circle cx="25" cy="25" r="20" fill="none" stroke="${col}" stroke-width="4" stroke-linecap="round"
+      stroke-dasharray="${dash}" stroke-dashoffset="${off}" transform="rotate(-90 25 25)"/>
+    <g class="${pct>0?"spin":""}" style="animation-duration:${speed}s">
+      ${[0,120,240].map(a=>`<ellipse cx="25" cy="17.5" rx="3.6" ry="6.5" fill="${pct>0?col:"#3a4357"}" transform="rotate(${a} 25 25)"/>`).join("")}
+    </g><circle cx="25" cy="25" r="2.6" fill="#eef1f7"/></svg>`;
+}
+
+function speedMode(p){
+  p = num(p); if (p === null) return ["—",""];
+  const map = {50:"Stable", 100:"Standard", 125:"Ultrafast"};
+  return [map[p] || (p < 50 ? "Silent" : "Custom"), `${p}% speed`];
+}
+
+function spoolsFrom(r){
+  const info = r.boxsInfo || r.boxInfo;
+  const out = [];
+  const boxes = info && (info.materialBoxs || info.materialBoxes || (Array.isArray(info) ? info : null));
+  if (boxes){
+    boxes.forEach(b => {
+      const mats = b.materials || b.material || [];
+      const isSpool = b.type === 1 || b.id === 0 && mats.length === 1;
+      mats.forEach((m, i) => out.push({
+        id: isSpool ? "Ext" : `${b.id ?? 1}${"ABCD"[m.id ?? i] || i}`,
+        color: color(m.color), type: m.type || m.name || "", percent: num(m.percent),
+        active: m.state === 2 || m.selected === 1 || m.active === 1,
+        empty: !m.type && !m.name && !color(m.color)
+      }));
+    });
+  }
+  return out;
+}
+
+function renderK2(k2, cfg){
+  const r = k2.raw || {};
+  const st = STATES[r.state] || ["Online",""];
+  const chip = $("k2-chip");
+  chip.className = "chip " + (k2.connected ? (st[1] || "ok") : "bad");
+  chip.innerHTML = `<i></i>K2 · ${k2.connected ? st[0] : "offline"}`;
+  $("k2-state").className = "chip " + st[1]; $("k2-state").textContent = k2.connected ? st[0] : "Offline";
+  if (r.model) $("k2-name").textContent = `Creality ${r.model}`;
+  $("k2-ip").textContent = cfg.k2_ip || "";
+
+  if (k2.connected && camLoaded !== cfg.camera_mode){
+    const mj = cfg.camera_mode === "mjpeg";
+    $("k2-cam").innerHTML = `<div class="badge"><i></i>LIVE</div><iframe allow="autoplay" src="http://${location.hostname}:${cfg.go2rtc_port}/stream.html?src=${mj?"k2_mjpeg":"k2"}&mode=${mj?"mjpeg":"webrtc,mse"}"></iframe>`;
+    camLoaded = cfg.camera_mode;
+  }
+
+  const active = [1,5].includes(Number(r.state));
+  const pct = Math.max(0, Math.min(100, num(r.printProgress) ?? 0));
+  $("ring").style.strokeDashoffset = 276.5 * (1 - pct/100);
+  $("pct").textContent = pct.toFixed(0) + "%";
+  $("ring-sub").textContent = active ? st[0].toLowerCase() : (r.state == 2 ? "done" : "idle");
+  $("fname").textContent = (r.printFileName || "").split("/").pop() || "Nothing printing";
+
+  const layer = num(r.layer), total = num(r.TotalLayer);
+  $("layer-txt").innerHTML = total ? `<span>Layer ${layer ?? 0} / ${total}</span><span>${Math.round((layer||0)/total*100)}%</span>` : "<span>Layer —</span><span></span>";
+  $("layer-bar").style.width = total ? ((layer||0)/total*100) + "%" : "0";
+
+  const left = num(r.printLeftTime);
+  $("left").textContent = active ? dur(left) : "—";
+  $("elap").textContent = active ? dur(r.printJobTime) : "—";
+  $("eta").textContent = active && left ? new Date(Date.now()+left*1000)
+      .toLocaleString([], {weekday:"short", hour:"numeric", minute:"2-digit"}) : "—";
+  const w = num(pick(r, "materialWeight", "printFileWeight", "fileWeight", "estimatedWeight", "usedMaterialWeight"));
+  const len = num(pick(r, "usedMaterialLength"));
+  $("weight").textContent = w !== null ? `${w.toFixed(1)} g` : len !== null ? `${(len/1000).toFixed(2)} m` : "—";
+
+  if (k2.thumb_ver !== thumbVer){
+    thumbVer = k2.thumb_ver;
+    $("thumb").innerHTML = thumbVer > 0 ? `<img src="/api/thumb.png?v=${thumbVer}" alt="">` : "<span>No preview</span>";
+  }
+
+  setTemp("noz", r.nozzleTemp, r.targetNozzleTemp, 300);
+  setTemp("bed", r.bedTemp0, r.targetBedTemp0, 110);
+  setTemp("box", r.boxTemp, r.targetBoxTemp, 60);
+
+  const fans = [["Model", pick(r,"modelFanPct","fan0Pct"), "#36d6a0"],
+                ["Case",  pick(r,"caseFanPct","fan2Pct"), "#5cc8ff"],
+                ["Side",  pick(r,"auxiliaryFanPct","sideFanPct","fan1Pct"), "#a98bff"]];
+  $("fans").innerHTML = fans.map(([n, v, c]) => { const p = Math.round(num(v) ?? 0);
+    return `<div class="fan">${fanSVG(p, c)}<div><div class="fv num">${v === undefined ? "—" : p+"%"}</div><div class="fl">${n}</div></div></div>`; }).join("");
+
+  const [mode, sub] = speedMode(pick(r, "curFeedratePct", "speedPct"));
+  $("spd-mode").textContent = mode;
+  const rs = num(r.realTimeSpeed), fl = num(r.realTimeFlow);
+  $("spd-sub").textContent = [sub, rs !== null ? `${rs.toFixed(0)} mm/s` : "", fl !== null ? `${fl.toFixed(1)} mm³/s` : ""].filter(Boolean).join(" · ");
+  const led = Number(pick(r, "lightSw", "ledState")) === 1;
+  $("led").className = "led" + (led ? " on" : ""); $("led").querySelector("span").textContent = led ? "LED on" : "LED off";
+
+  const sp = spoolsFrom(r);
+  if (sp.length) $("spools").innerHTML = sp.slice(0, 9).map(s => `
+    <div class="spool${s.active ? " active" : ""}">
+      <div class="disc${s.empty ? " empty" : ""}" style="${s.color ? `background:${s.color}` : ""}"></div>
+      <div class="ty">${esc(s.type || "—")}</div>
+      <div class="id">${esc(s.id)}${s.percent !== null && s.percent >= 0 ? ` · ${s.percent}%` : ""}</div>
+    </div>`).join("");
+}
+
+function renderOmni(o){
+  const s = o.status || {}, chip = $("omni-chip");
+  const label = !o.bridge ? "waiting for Mac" : !o.connected ? "bridge offline" : (s.state || "online");
+  const cls = !o.bridge ? "" : !o.connected ? "bad" : ({good:"omni", warn:"warn", bad:"bad"}[s.state_color] || "omni");
+  chip.className = "chip " + cls; chip.innerHTML = `<i></i>Omni · ${esc(label)}`;
+  $("omni-state").className = "chip " + cls; $("omni-state").textContent = label;
+  if (s.device_name) $("omni-name").textContent = s.device_name;
+  $("omni-title").textContent = o.connected ? (s.title || "") : "";
+  const p = num(s.progress);
+  $("omni-barwrap").classList.toggle("hidden", p === null);
+  $("omni-bar").style.width = (p ?? 0) + "%";
+
+  const want = o.connected && s.stream ? `${o.bridge}/stream.mjpg` : null;
+  if (want !== omniStream){
+    omniStream = want;
+    const img = $("omni-img");
+    if (want){ img.src = want; img.classList.remove("hidden"); $("omni-msg").classList.add("hidden"); }
+    else { img.removeAttribute("src"); img.classList.add("hidden"); $("omni-msg").classList.remove("hidden");
+      $("omni-msg").textContent = o.connected ? (s.subtitle || "No picture from the Mac yet") : "Start PrintDeck Bridge on your Mac"; }
+  }
+  $("omni-fields").innerHTML = (o.connected ? (s.fields || []) : []).map(([l, v]) =>
+    `<div class="row"><span>${esc(l)}</span><b>${esc(v)}</b></div>`).join("");
+}
+
+async function tick(){
+  try{
+    const st = await (await fetch("/api/state", {cache:"no-store"})).json();
+    if (bootId && st.boot_id !== bootId) return location.reload();   // auto-updated -> reload
+    bootId = st.boot_id;
+    renderK2(st.k2, st.config);
+    renderOmni(st.omni);
+  }catch(e){ $("k2-chip").className = "chip bad"; $("k2-chip").innerHTML = "<i></i>PrintDeck server down"; }
+}
+$("omni-img").onerror = () => {
+  $("omni-img").classList.add("hidden");
+  $("omni-msg").textContent = "Omni feed reconnecting…"; $("omni-msg").classList.remove("hidden");
+  setTimeout(() => { omniStream = null; }, 5000);
+};
+function clock(){ const d = new Date();
+  $("clock").textContent = d.toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
+  $("date").textContent = d.toLocaleDateString([], {weekday:"short", month:"short", day:"numeric"}); }
+setInterval(tick, 1000); tick(); setInterval(clock, 1000); clock();
+</script>
+</body>
+</html>
