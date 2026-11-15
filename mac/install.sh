@@ -43,7 +43,8 @@ if [ ! -f "$SUPPORT/config.json" ]; then
   "fps": 2,
   "max_width": 1280,
   "device_name": "xTool O1 Omni",
-  "usb_match": "xtool"
+  "usb_match": "xtool",
+  "screen_capture": false
 }
 EOF
   echo "-> Config saved to $SUPPORT/config.json"
@@ -158,12 +159,9 @@ fi
 echo
 echo "=== PrintDeck Bridge is running (printer icon in your menu bar) ==="
 if [ "$UPDATE" != 1 ]; then
-  echo "1. macOS will ask for Screen Recording permission -> allow 'PrintDeck Bridge'."
-  echo "   (Or: System Settings > Privacy & Security > Screen & System Audio Recording.)"
-  echo "   Then quit it from the menu bar icon - it restarts with the permission at next login,"
-  echo "   or run:  launchctl kickstart -k $GUI/com.printdeck.bridge"
-  echo "2. If asked about 'local network' or incoming connections, click Allow."
-  echo "3. Keep xTool Studio open (it can be behind other windows, just not minimized)."
+  echo "1. If asked about 'local network' or incoming connections, click Allow."
+  echo "2. Screen capture of xTool Studio is OFF (no Screen Recording permission needed)."
+  echo "   To turn it on later, set \"screen_capture\": true in $SUPPORT/config.json"
 fi
 }
 main "$@"; exit

@@ -18,6 +18,7 @@ struct BridgeConfig: Codable {
     var max_width: Int?
     var device_name: String?
     var usb_match: String?
+    var screen_capture: Bool?
 }
 
 let supportDir = FileManager.default.homeDirectoryForCurrentUser
@@ -34,6 +35,7 @@ let WINDOW_MATCH = (config.window_match ?? "xTool").lowercased()
 let FPS = max(0.5, min(config.fps ?? 2, 10))
 let MAX_WIDTH = config.max_width ?? 1280
 let DEVICE_NAME = config.device_name ?? "xTool O1 Omni"
+let CAPTURE = config.screen_capture ?? false   // needs Screen Recording permission
 let USB_MATCH = (config.usb_match ?? "xtool").lowercased()
 let DISCOVERY_PORT: UInt16 = 47800
 let MAC_NAME = Host.current().localizedName ?? "Mac"
@@ -241,7 +243,7 @@ func statusJSON() -> Data {
     var state = "Online", color = "good"
     if !s.permission { state = "Needs permission"; color = "bad" }
     else if s.omniOnline == false { state = OMNI_IP.isEmpty ? "Omni unplugged" : "Omni offline"; color = "bad" }
-    else if !s.studioOpen { state = "Studio closed"; color = "warn" }
+    else if CAPTURE && !s.studioOpen { state = "Studio closed"; color = "warn" }
 
     var fields: [[String]] = []
     if OMNI_IP.isEmpty {
@@ -253,15 +255,16 @@ func statusJSON() -> Data {
         fields.append(["Omni", o])
         fields.append(["Omni IP", OMNI_IP])
     }
-    fields.append(["xTool Studio", s.studioOpen ? "Open" : "Closed"])
+    if CAPTURE { fields.append(["xTool Studio", s.studioOpen ? "Open" : "Closed"]) }
     fields.append(["Bridge", MAC_NAME])
     let title = cleanTitle(s.windowTitle)
     let obj: [String: Any] = [
         "device_name": DEVICE_NAME,
         "state": state,
         "state_color": color,
-        "title": title.isEmpty ? "xTool Studio" : title,
-        "subtitle": !s.permission ? "Allow Screen Recording for PrintDeck Bridge on the Mac"
+        "title": !CAPTURE ? (s.omniOnline == true ? "Connected to Mac" : "Not connected") : (title.isEmpty ? "xTool Studio" : title),
+        "subtitle": !CAPTURE ? "No camera view (screen capture is off on the Mac)"
+                  : !s.permission ? "Allow Screen Recording for PrintDeck Bridge on the Mac"
                   : s.studioOpen ? "Live view of xTool Studio" : "Open xTool Studio on the Mac",
         "stream": fresh,
         "fields": fields,
@@ -385,9 +388,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(item("Quit", #selector(quit), key: "q"))
         statusItem.menu = menu
 
-        if !CGPreflightScreenCaptureAccess() { _ = CGRequestScreenCaptureAccess() }
         listener = startHTTP()
-        capturer.start()
+        if CAPTURE {
+            if !CGPreflightScreenCaptureAccess() { _ = CGRequestScreenCaptureAccess() }
+            capturer.start()
+        }
         omni.start()
         Timer.scheduledTimer(timeInterval: 2, target: self, selector: #selector(refresh), userInfo: nil, repeats: true)
         refresh()
@@ -402,7 +407,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func refresh() {
         netQueue.async { sendBroadcast() }
         let s = shared.get()
-        if !s.permission { statusLine.title = "⚠️ Needs Screen Recording permission" }
+        if !CAPTURE { statusLine.title = "Screen capture off · sharing USB status" }
+        else if !s.permission { statusLine.title = "⚠️ Needs Screen Recording permission" }
         else if s.studioOpen { statusLine.title = "● Streaming xTool Studio on port \(HTTP_PORT)" }
         else { statusLine.title = "○ xTool Studio not open" }
         if OMNI_IP.isEmpty {
