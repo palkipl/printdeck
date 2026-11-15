@@ -7,6 +7,7 @@ import Cocoa
 import ScreenCaptureKit
 import Network
 import IOKit
+import ImageIO
 
 // MARK: - Config ------------------------------------------------------------
 
@@ -52,6 +53,15 @@ struct Snapshot {
     var windowTitle = ""
     var omniOnline: Bool?
     var usbName = ""
+    // From xTool Studio's own files
+    var preview: Data?        // PNG of the last job sent to the Omni
+    var previewVer = 0
+    var scan: Data?           // JPEG of the latest bed scan
+    var scanVer = 0
+    var scanTime: Date?
+    var jobTime: Date?
+    var jobMode = ""
+    var jobLayers = 0
     var permission = true
     var lastError = ""
 }
@@ -133,6 +143,99 @@ final class Capturer {
             window = nil
             shared.update { $0.lastError = error.localizedDescription }
         }
+    }
+}
+
+// MARK: - xTool Studio files (job preview + bed scan) -------------------------
+
+let atommDir = FileManager.default.homeDirectoryForCurrentUser
+    .appendingPathComponent("Library/Application Support/xTool Studio/atomm")
+
+func mtime(_ u: URL) -> Date? {
+    (try? u.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+}
+func exists(_ u: URL) -> Bool { FileManager.default.fileExists(atPath: u.path) }
+func children(_ u: URL, dirsOnly: Bool = false) -> [URL] {
+    let items = (try? FileManager.default.contentsOfDirectory(
+        at: u, includingPropertiesForKeys: [.contentModificationDateKey, .isDirectoryKey],
+        options: [.skipsHiddenFiles])) ?? []
+    guard dirsOnly else { return items }
+    return items.filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true }
+}
+func newest(_ urls: [URL]) -> URL? {
+    urls.max { (mtime($0) ?? .distantPast) < (mtime($1) ?? .distantPast) }
+}
+
+/// Small version of a (possibly huge) image. PNG keeps transparency.
+func shrink(_ url: URL, maxPixels: Int, png: Bool) -> Data? {
+    guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+    let opts: [CFString: Any] = [
+        kCGImageSourceCreateThumbnailFromImageAlways: true,
+        kCGImageSourceThumbnailMaxPixelSize: maxPixels,
+        kCGImageSourceCreateThumbnailWithTransform: true,
+    ]
+    guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) else { return nil }
+    let rep = NSBitmapImageRep(cgImage: cg)
+    return png ? rep.representation(using: .png, properties: [:])
+               : rep.representation(using: .jpeg, properties: [.compressionFactor: 0.75])
+}
+
+final class StudioWatcher {
+    private let q = DispatchQueue(label: "printdeck.studio", qos: .utility)
+    private var previewKey = "", scanKey = ""
+
+    func start() { q.async { self.loop() } }
+
+    private func loop() {
+        scanJobs()
+        scanBed()
+        q.asyncAfter(deadline: .now() + 5) { self.loop() }
+    }
+
+    /// atomm/<model>/task/<job>/  - newest job folder across all models (e.g. DT002)
+    private func scanJobs() {
+        let tasks = children(atommDir, dirsOnly: true).flatMap { model -> [URL] in
+            let t = model.appendingPathComponent("task")
+            return exists(t) ? children(t, dirsOnly: true) : []
+        }
+        guard let job = newest(tasks) else { return }
+        let uvDirs = children(job.appendingPathComponent("uv"), dirsOnly: true)
+        var candidates = [job.appendingPathComponent("dtf/preLook.thumb.png"),
+                          job.appendingPathComponent("dtf/preLook.png")]
+        candidates += uvDirs.map { $0.appendingPathComponent("source.png") }
+        let img = candidates.first(where: exists)
+        var modes: [String] = []
+        if !uvDirs.isEmpty { modes.append("UV") }
+        if exists(job.appendingPathComponent("dtf")) { modes.append("DTF") }
+        let layers = uvDirs.reduce(0) { $0 + children($1.appendingPathComponent("layers")).count }
+        let when = mtime(job)
+
+        let key = (img?.path ?? "") + "\(mtime(img ?? job) ?? Date.distantPast)"
+        var data: Data? = nil
+        let changed = key != previewKey
+        if changed, let img = img { data = shrink(img, maxPixels: 600, png: true) }
+        if changed { previewKey = key }
+        shared.update { s in
+            s.jobTime = when; s.jobMode = modes.joined(separator: " + "); s.jobLayers = layers
+            if changed { s.preview = data; s.previewVer &+= 1 }
+        }
+    }
+
+    /// atomm/temp_project/<project>/cisScanRes/output/result.jpeg - newest bed scan
+    private func scanBed() {
+        let projects = children(atommDir.appendingPathComponent("temp_project"), dirsOnly: true)
+        let scans = projects.flatMap { p -> [URL] in
+            let r = p.appendingPathComponent("cisScanRes")
+            return [r.appendingPathComponent("output/result.jpeg"),
+                    r.appendingPathComponent("bgImg_uvPrint_big.jpeg")].filter(exists)
+        }
+        guard let scan = newest(scans) else { return }
+        let when = mtime(scan)
+        let key = scan.path + "\(when ?? Date.distantPast)"
+        guard key != scanKey else { return }
+        scanKey = key
+        let data = shrink(scan, maxPixels: 1280, png: false)
+        shared.update { s in s.scan = data; s.scanVer &+= 1; s.scanTime = when }
     }
 }
 
@@ -251,35 +354,53 @@ func statusJSON() -> Data {
     if OMNI_IP.isEmpty {
         let o = s.omniOnline.map { $0 ? "Connected" : "Not plugged in" } ?? "Checking…"
         fields.append(["Omni USB", o])
-        if !s.usbName.isEmpty { fields.append(["Device", s.usbName]) }
     } else {
         let o = s.omniOnline.map { $0 ? "Online" : "Offline" } ?? "Checking…"
         fields.append(["Omni", o])
         fields.append(["Omni IP", OMNI_IP])
     }
     if CAPTURE { fields.append(["xTool Studio", s.studioOpen ? "Open" : "Closed"]) }
+    let df = DateFormatter(); df.dateFormat = "MMM d, h:mm a"
+    if let t = s.jobTime { fields.append(["Last job sent", df.string(from: t)]) }
+    if !s.jobMode.isEmpty { fields.append(["Mode", s.jobMode]) }
+    if s.jobLayers > 0 { fields.append(["Layers", "\(s.jobLayers)"]) }
+    if let t = s.scanTime { fields.append(["Last bed scan", df.string(from: t)]) }
     fields.append(["Bridge", MAC_NAME])
-    let title = cleanTitle(s.windowTitle)
-    let obj: [String: Any] = [
-        "device_name": DEVICE_NAME,
-        "state": state,
-        "state_color": color,
-        "title": !CAPTURE ? (s.omniOnline == true ? "Connected to Mac" : "Not connected") : (title.isEmpty ? "xTool Studio" : title),
-        "subtitle": !CAPTURE ? "No camera view (screen capture is off on the Mac)"
-                  : !s.permission ? "Allow Screen Recording for PrintDeck Bridge on the Mac"
-                  : s.studioOpen ? "Live view of xTool Studio" : "Open xTool Studio on the Mac",
-        "stream": fresh,
-        "fields": fields,
-        "bridge_version": VERSION,
-    ]
-    return (try? JSONSerialization.data(withJSONObject: obj)) ?? Data("{}".utf8)
+    var title: String
+    var subtitle: String
+    if CAPTURE {
+        let t = cleanTitle(s.windowTitle)
+        title = t.isEmpty ? "xTool Studio" : t
+        if !s.permission { subtitle = "Allow Screen Recording for PrintDeck Bridge on the Mac" }
+        else if s.studioOpen { subtitle = "Live view of xTool Studio" }
+        else { subtitle = "Open xTool Studio on the Mac" }
+    } else {
+        if let jt = s.jobTime {
+            title = "Last job · " + RelativeDateTimeFormatter().localizedString(for: jt, relativeTo: Date())
+        } else {
+            title = s.omniOnline == true ? "Connected to Mac" : "Not connected"
+        }
+        subtitle = s.scan != nil ? "Latest bed scan" : "Run a bed scan in xTool Studio to see it here"
+    }
+    var o: [String: Any] = [:]
+    o["device_name"] = DEVICE_NAME
+    o["state"] = state
+    o["state_color"] = color
+    o["title"] = title
+    o["subtitle"] = subtitle
+    o["stream"] = fresh
+    o["fields"] = fields
+    o["bridge_version"] = VERSION
+    if s.scan != nil { o["image"] = "/scan.jpg?v=\(s.scanVer)" }
+    if s.preview != nil { o["thumb"] = "/preview.png?v=\(s.previewVer)" }
+    return (try? JSONSerialization.data(withJSONObject: o)) ?? Data("{}".utf8)
 }
 
 let previewHTML = """
 <!doctype html><html><head><meta charset="utf-8"><title>PrintDeck Bridge</title>
 <style>body{background:#07090d;color:#eef1f7;font-family:system-ui;margin:24px}
 img{max-width:100%;border-radius:12px;background:#000}pre{background:#10141c;padding:12px;border-radius:8px}</style>
-</head><body><h2>PrintDeck Bridge</h2><img src="/stream.mjpg"><pre id="s"></pre>
+</head><body><h2>PrintDeck Bridge</h2><img src="/scan.jpg" style="max-width:48%"> <img src="/preview.png" style="max-width:48%"><pre id="s"></pre>
 <script>setInterval(async()=>{document.getElementById('s').textContent=
 JSON.stringify(await (await fetch('/status.json')).json(),null,2)},2000)</script></body></html>
 """
@@ -336,6 +457,12 @@ func handle(_ c: NWConnection) {
         case "/snapshot.jpg":
             if let j = shared.get().jpeg { respond(c, "200 OK", "image/jpeg", j) }
             else { respond(c, "404 Not Found", "text/plain", Data("no frame".utf8)) }
+        case "/scan.jpg":
+            if let j = shared.get().scan { respond(c, "200 OK", "image/jpeg", j) }
+            else { respond(c, "404 Not Found", "text/plain", Data("no scan".utf8)) }
+        case "/preview.png":
+            if let p = shared.get().preview { respond(c, "200 OK", "image/png", p) }
+            else { respond(c, "404 Not Found", "text/plain", Data("no preview".utf8)) }
         case "/usb.json":
             let body = (try? JSONSerialization.data(withJSONObject: listUSBDevices(), options: .prettyPrinted)) ?? Data("[]".utf8)
             respond(c, "200 OK", "application/json", body)
@@ -367,6 +494,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let omniLine = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     let capturer = Capturer()
     let omni = OmniChecker()
+    let studio = StudioWatcher()
     var listener: NWListener?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -396,6 +524,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             capturer.start()
         }
         omni.start()
+        studio.start()
         Timer.scheduledTimer(timeInterval: 2, target: self, selector: #selector(refresh), userInfo: nil, repeats: true)
         refresh()
     }

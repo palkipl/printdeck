@@ -72,6 +72,10 @@
 
   /* ---------- omni ---------- */
   .omni .cam{flex:0 0 auto;aspect-ratio:4/3}
+  .cam img.othumb{inset:auto;right:.8vw;bottom:.8vh;width:34%;height:42%;z-index:2;
+    background:#07090dd9;border:1px solid var(--line);border-radius:1vh;padding:.6vh}
+  .cam .otag{position:absolute;right:.8vw;bottom:calc(42% + 1.4vh);z-index:2;font-size:1.2vh;
+    color:var(--dim);background:#07090dd9;padding:.2vh .5vw;border-radius:99px}
   .ofields{padding:1vh 1vw;display:flex;flex-direction:column;gap:.8vh;overflow:hidden}
   .ofields .row{display:flex;justify-content:space-between;gap:1vw;font-size:1.7vh;padding:.7vh .8vw;
     background:var(--panel2);border-radius:1vh}
@@ -178,6 +182,8 @@
     <div class="cam">
       <div class="msg" id="omni-msg">Start PrintDeck Bridge on your Mac</div>
       <img id="omni-img" class="hidden" alt="">
+      <span class="otag hidden" id="omni-tag">Job preview</span>
+      <img id="omni-thumb" class="othumb hidden" alt="">
     </div>
     <div class="otitle" id="omni-title"></div>
     <div class="obar hidden" id="omni-barwrap" style="margin-top:.8vh"><div id="omni-bar"></div></div>
@@ -216,7 +222,7 @@ const $ = id => document.getElementById(id);
 if (new URLSearchParams(location.search).has("kiosk")) document.body.classList.add("kiosk");
 
 const STATES = {0:["Idle",""],1:["Printing","ok"],2:["Complete","ok"],3:["Failed","bad"],4:["Stopped","warn"],5:["Paused","warn"]};
-let camLoaded = null, thumbVer = -1, omniStream = null, bootId = null;
+let camLoaded = null, thumbVer = -1, omniStream = null, omniThumb = null, bootId = null;
 
 const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
 const pick = (r, ...keys) => { for (const k of keys) if (r[k] !== undefined && r[k] !== "") return r[k]; return undefined; };
@@ -349,7 +355,15 @@ function renderOmni(o){
   $("omni-barwrap").classList.toggle("hidden", p === null);
   $("omni-bar").style.width = (p ?? 0) + "%";
 
-  const want = o.connected && s.stream ? `${o.bridge}/stream.mjpg` : null;
+  // Live window capture if enabled on the Mac, otherwise the latest bed scan
+  const want = !o.connected ? null : s.stream ? `${o.bridge}/stream.mjpg` : (s.image ? o.bridge + s.image : null);
+  const th = o.connected && s.thumb ? o.bridge + s.thumb : null;
+  if (th !== omniThumb){
+    omniThumb = th;
+    const t = $("omni-thumb");
+    if (th){ t.src = th; t.classList.remove("hidden"); $("omni-tag").classList.remove("hidden"); }
+    else { t.removeAttribute("src"); t.classList.add("hidden"); $("omni-tag").classList.add("hidden"); }
+  }
   if (want !== omniStream){
     omniStream = want;
     const img = $("omni-img");
