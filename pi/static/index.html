@@ -18,7 +18,9 @@
   html,body{height:100%;background:var(--bg);color:var(--text);
     font-family:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
   body.kiosk,body.kiosk *{cursor:none!important}
-  body{display:grid;grid-template-rows:auto 1fr auto;height:100vh;padding:1.4vh 1.2vw;gap:1.2vh}
+  body{display:grid;grid-template-rows:auto 1fr auto;height:100vh;padding:1.4vh 1.2vw;gap:1.2vh;
+    animation:fadein .5s ease-out both}
+  @keyframes fadein{from{opacity:0}to{opacity:1}}
   .num{font-variant-numeric:tabular-nums}
 
   /* ---------- top bar ---------- */
@@ -206,7 +208,7 @@
         <div class="osub" id="omni-sub"></div>
       </div>
       <div class="obar hidden" id="omni-barwrap"><div id="omni-bar"></div></div>
-      <div>
+      <div id="ink-block" class="hidden">
         <div class="sec"><span>Ink</span><span id="ink-when"></span></div>
         <div class="ink" id="omni-ink" style="margin-top:.6vh"><div class="ink-empty">Waiting for ink levels…</div></div>
       </div>
@@ -381,9 +383,9 @@ const INK_COLORS = {C:"#00aeef", M:"#ec008c", Y:"#ffe600", K:"#3a3a3a", W:"#f4f4
   cyan:"#00aeef", magenta:"#ec008c", yellow:"#ffe600", black:"#3a3a3a", white:"#f4f4f4", varnish:"#cfe8ff", gloss:"#cfe8ff"};
 function renderInk(ink, when){
   const box = $("omni-ink");
-  if (!Array.isArray(ink) || !ink.length){
-    box.innerHTML = `<div class="ink-empty">Ink levels not available yet</div>`; $("ink-when").textContent = ""; return;
-  }
+  const has = Array.isArray(ink) && ink.length > 0;
+  $("ink-block").classList.toggle("hidden", !has);
+  if (!has) return;
   box.innerHTML = ink.map(t => {
     const p = Math.max(0, Math.min(100, num(t.percent) ?? 0));
     const key = String(t.name || "").trim();

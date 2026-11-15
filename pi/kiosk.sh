@@ -21,6 +21,8 @@ while true; do
     --no-first-run --disable-session-crashed-bubble --disable-features=Translate \
     --autoplay-policy=no-user-gesture-required --check-for-update-interval=31536000 \
     --allow-file-access-from-files --default-background-color=ff07090d \
+    --password-store=basic --disable-extensions --disable-sync --disable-background-networking \
+    --disable-component-update --no-default-browser-check --disable-gpu-shader-disk-cache \
     "$URL"
   [ $? -eq 0 ] && break    # closed on purpose
   sleep 3                  # crashed -> reopen

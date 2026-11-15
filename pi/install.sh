@@ -64,8 +64,7 @@ echo "-> Writing background services"
 $SUDO tee /etc/systemd/system/printdeck.service >/dev/null <<EOF
 [Unit]
 Description=PrintDeck web server
-After=network-online.target
-Wants=network-online.target
+After=network.target
 [Service]
 User=$ME
 WorkingDirectory=$DIR
@@ -79,8 +78,7 @@ EOF
 $SUDO tee /etc/systemd/system/printdeck-go2rtc.service >/dev/null <<EOF
 [Unit]
 Description=PrintDeck camera re-streamer (go2rtc)
-After=network-online.target
-Wants=network-online.target
+After=network.target
 [Service]
 User=$ME
 WorkingDirectory=$DIR
@@ -119,7 +117,7 @@ $SUDO systemctl start printdeck-update.timer
 
 # ---------- app launcher + kiosk on login ----------
 chmod +x "$DIR"/*.sh
-mkdir -p "$HOME/.local/share/applications" "$HOME/Desktop"
+mkdir -p "$HOME/.local/share/applications"
 cat > "$HOME/.local/share/applications/printdeck.desktop" <<EOF
 [Desktop Entry]
 Type=Application
@@ -130,8 +128,7 @@ Icon=$DIR/branding/icon.png
 Categories=Utility;
 Terminal=false
 EOF
-cp "$HOME/.local/share/applications/printdeck.desktop" "$HOME/Desktop/printdeck.desktop"
-chmod +x "$HOME/Desktop/printdeck.desktop"
+rm -f "$HOME/Desktop/printdeck.desktop"   # menu entry only (Menu > Accessories/Other > PrintDeck)
 
 rm -f "$HOME/.config/autostart/printdeck-kiosk.desktop"   # old v1 launcher
 if [ -d /etc/xdg/labwc ]; then
