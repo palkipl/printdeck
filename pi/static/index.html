@@ -301,17 +301,17 @@ function renderK2(k2, cfg){
   // On the Pi screen use the light MJPEG stream (Pi 3 can't decode HD video smoothly);
   // on a PC use the full-quality stream.
   const onPi = document.body.classList.contains("kiosk");
-  const mode = onPi && cfg.pi_camera !== "webrtc" ? "lite" : cfg.camera_mode;
-  if (k2.connected && camLoaded !== mode){
+  const camMode = onPi && cfg.pi_camera !== "webrtc" ? "lite" : cfg.camera_mode;
+  if (k2.connected && camLoaded !== camMode){
     const base = `http://${location.hostname}:${cfg.go2rtc_port}`;
-    if (mode === "lite"){
+    if (camMode === "lite"){
       $("k2-cam").innerHTML = `<div class="badge"><i></i>LIVE</div><img id="k2-mjpeg" alt="" src="${base}/api/stream.mjpeg?src=k2_lite">`;
       $("k2-mjpeg").onerror = () => { camLoaded = null; };         // retry on next tick
     } else {
-      const mj = mode === "mjpeg";
+      const mj = camMode === "mjpeg";
       $("k2-cam").innerHTML = `<div class="badge"><i></i>LIVE</div><iframe allow="autoplay" src="${base}/stream.html?src=${mj?"k2_mjpeg":"k2"}&mode=${mj?"mjpeg":"webrtc,mse"}"></iframe>`;
     }
-    camLoaded = mode;
+    camLoaded = camMode;
   }
 
   const code = Number(r.state);
