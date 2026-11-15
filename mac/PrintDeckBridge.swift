@@ -172,7 +172,9 @@ final class OmniChecker {
     }
 
     private func checkUSB() {
-        let hit = listUSBDevices().first { $0.lowercased().contains(USB_MATCH) }
+        // xTool devices report as Makeblock ("makeblock_cm") over USB
+        let keys = Set([USB_MATCH, "makeblock", "xtool"])
+        let hit = listUSBDevices().first { d in keys.contains { d.lowercased().contains($0) } }
         shared.update { $0.omniOnline = hit != nil; $0.usbName = hit ?? "" }
         q.asyncAfter(deadline: .now() + 3) { self.checkUSB() }
     }

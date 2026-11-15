@@ -43,7 +43,7 @@ if [ ! -f "$SUPPORT/config.json" ]; then
   "fps": 2,
   "max_width": 1280,
   "device_name": "xTool O1 Omni",
-  "usb_match": "xtool",
+  "usb_match": "makeblock",
   "screen_capture": false
 }
 EOF
