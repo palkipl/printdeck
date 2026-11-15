@@ -86,16 +86,6 @@
   .obar div{height:100%;width:0;background:var(--omni);transition:width .8s}
   .sec{font-size:1.2vh;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;font-weight:600;
     display:flex;justify-content:space-between}
-  .ink{display:flex;gap:.5vw;align-items:flex-end}
-  .tank{flex:1;display:flex;flex-direction:column;align-items:center;gap:.35vh;min-width:0}
-  .tube{width:100%;max-width:3.4vh;height:6.2vh;border-radius:.8vh;background:var(--panel2);
-    position:relative;overflow:hidden;box-shadow:inset 0 0 0 1px #ffffff14}
-  .tube .fill{position:absolute;left:0;right:0;bottom:0;transition:height .8s}
-  .tube .fill::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,#ffffff26,transparent 60%)}
-  .tank.low .tube{box-shadow:inset 0 0 0 2px var(--bad)}
-  .tank .pc{font-size:1.35vh;font-weight:700} .tank .nm{font-size:1.15vh;color:var(--dim);font-weight:600}
-  .tank.low .pc{color:var(--bad)}
-  .ink-empty{font-size:1.35vh;color:var(--faint);padding:.4vh 0}
   .ofields{display:grid;grid-template-columns:1fr 1fr;gap:.6vh .6vw}
   .ofields .row{background:var(--panel2);border-radius:.9vh;padding:.55vh .7vw;min-width:0}
   .ofields .row span{display:block;font-size:1.15vh;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
@@ -208,10 +198,6 @@
         <div class="osub" id="omni-sub"></div>
       </div>
       <div class="obar hidden" id="omni-barwrap"><div id="omni-bar"></div></div>
-      <div id="ink-block" class="hidden">
-        <div class="sec"><span>Ink</span><span id="ink-when"></span></div>
-        <div class="ink" id="omni-ink" style="margin-top:.6vh"><div class="ink-empty">Waiting for ink levels…</div></div>
-      </div>
       <div class="ofields" id="omni-fields"></div>
     </div>
   </section>
@@ -389,23 +375,6 @@ function renderK2(k2, cfg){
     </div>`).join("");
 }
 
-const INK_COLORS = {C:"#00aeef", M:"#ec008c", Y:"#ffe600", K:"#3a3a3a", W:"#f4f4f4", V:"#cfe8ff",
-  cyan:"#00aeef", magenta:"#ec008c", yellow:"#ffe600", black:"#3a3a3a", white:"#f4f4f4", varnish:"#cfe8ff", gloss:"#cfe8ff"};
-function renderInk(ink, when){
-  const box = $("omni-ink");
-  const has = Array.isArray(ink) && ink.length > 0;
-  $("ink-block").classList.toggle("hidden", !has);
-  if (!has) return;
-  box.innerHTML = ink.map(t => {
-    const p = Math.max(0, Math.min(100, num(t.percent) ?? 0));
-    const key = String(t.name || "").trim();
-    const col = color(t.color) || INK_COLORS[key] || INK_COLORS[key.toLowerCase()] || "#888";
-    return `<div class="tank${p < 15 ? " low" : ""}"><div class="tube"><div class="fill" style="height:${p}%;background:${col}"></div></div>
-      <div class="pc num">${Math.round(p)}%</div><div class="nm">${esc(key.slice(0, 3).toUpperCase())}</div></div>`;
-  }).join("");
-  $("ink-when").textContent = when || "";
-}
-
 function renderOmni(o){
   const s = o.status || {}, chip = $("omni-chip");
   const label = !o.bridge ? "waiting for Mac" : !o.connected ? "bridge offline" : (s.state || "online");
@@ -415,7 +384,6 @@ function renderOmni(o){
   if (s.device_name) $("omni-name").textContent = s.device_name;
   $("omni-title").textContent = o.connected ? (s.title || "—") : "Not connected";
   $("omni-sub").textContent = o.connected ? (s.subtitle || "") : "Start PrintDeck Bridge on your Mac";
-  renderInk(o.connected ? s.ink : null, s.ink_time);
   const p = num(s.progress);
   $("omni-barwrap").classList.toggle("hidden", p === null);
   $("omni-bar").style.width = (p ?? 0) + "%";
