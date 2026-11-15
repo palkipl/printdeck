@@ -47,7 +47,7 @@ STATE = {
         "go2rtc_port": int(CFG.get("go2rtc_port", 1984)),
         "k2_ip": K2_IP,
         "k2_name": CFG.get("k2_name", "Creality K2 Combo"),
-        "pi_camera": CFG.get("pi_camera", "lite"),
+        "pi_camera": CFG.get("pi_camera", "webrtc"),   # webrtc = mini player (default); lite = small MJPEG
         "fan_animation": CFG.get("fan_animation", "slow"),   # slow | slower | off   # lite = small MJPEG on the Pi screen; webrtc = full HD
     },
 }
