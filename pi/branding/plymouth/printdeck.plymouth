@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=PrintDeck
+Description=PrintDeck boot screen with loading bar
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/printdeck
+ScriptFile=/usr/share/plymouth/themes/printdeck/printdeck.script

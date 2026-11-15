@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Opens PrintDeck full screen. Runs at login and from the PrintDeck app icon.
+# Shows a PrintDeck loading screen right away, then switches to the dashboard.
 # Alt+F4 exits to the desktop; it only relaunches by itself if Chromium crashes.
-URL="http://localhost:5000/?kiosk=1"
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+URL="file://$DIR/static/loading.html"
 
-pgrep -f "chromium.*localhost:5000" >/dev/null && exit 0   # already open
+pgrep -f "printdeck/static/loading.html" >/dev/null && exit 0   # already open
 
-for i in $(seq 1 60); do
-  curl -s -o /dev/null "http://localhost:5000" && break
-  sleep 1
-done
+# PrintDeck wallpaper behind everything (covers the gap before the browser opens)
+command -v pcmanfm >/dev/null && pcmanfm --set-wallpaper="$DIR/branding/wallpaper.png" --wallpaper-mode=fit >/dev/null 2>&1 &
 
 if [ -n "$DISPLAY" ] && command -v xset >/dev/null; then
   xset s off; xset -dpms; xset s noblank
@@ -20,6 +20,7 @@ while true; do
   "$BROWSER" --kiosk --noerrdialogs --disable-infobars --incognito \
     --no-first-run --disable-session-crashed-bubble --disable-features=Translate \
     --autoplay-policy=no-user-gesture-required --check-for-update-interval=31536000 \
+    --allow-file-access-from-files --default-background-color=ff07090d \
     "$URL"
   [ $? -eq 0 ] && break    # closed on purpose
   sleep 3                  # crashed -> reopen

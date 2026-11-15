@@ -126,7 +126,7 @@ Type=Application
 Name=PrintDeck
 Comment=3D printer dashboard
 Exec=$DIR/kiosk.sh
-Icon=$DIR/static/icon.svg
+Icon=$DIR/branding/icon.png
 Categories=Utility;
 Terminal=false
 EOF
@@ -141,6 +141,38 @@ else
   mkdir -p "$HOME/.config/autostart"
   cp "$HOME/.local/share/applications/printdeck.desktop" "$HOME/.config/autostart/printdeck.desktop"
 fi
+
+# ---------- PrintDeck boot screen ----------
+brand_boot() {
+  local SRC="$DIR/branding/plymouth" DST=/usr/share/plymouth/themes/printdeck
+  if command -v plymouth-set-default-theme >/dev/null; then
+    local NEW OLD CUR
+    NEW="$(cat "$SRC"/* | md5sum | cut -d' ' -f1)"
+    OLD="$(cat "$DST"/* 2>/dev/null | md5sum | cut -d' ' -f1)"
+    CUR="$(plymouth-set-default-theme 2>/dev/null)"
+    if [ "$NEW" != "$OLD" ] || [ "$CUR" != "printdeck" ]; then
+      echo "-> Installing PrintDeck boot screen (rebuilding boot image, takes 1-3 min on a Pi 3)"
+      $SUDO mkdir -p "$DST"
+      $SUDO cp "$SRC"/* "$DST"/
+      $SUDO plymouth-set-default-theme -R printdeck
+    fi
+  else
+    echo "   (plymouth not installed - skipping boot screen)"
+  fi
+  local CMD=/boot/firmware/cmdline.txt
+  [ -f "$CMD" ] || CMD=/boot/cmdline.txt
+  if [ -f "$CMD" ]; then
+    for opt in quiet splash logo.nologo vt.global_cursor_default=0; do
+      grep -qE "(^| )$opt( |\$)" "$CMD" || $SUDO sed -i "1 s/\$/ $opt/" "$CMD"
+    done
+  fi
+  local CFGTXT=/boot/firmware/config.txt
+  [ -f "$CFGTXT" ] || CFGTXT=/boot/config.txt
+  if [ -f "$CFGTXT" ] && ! grep -q '^disable_splash=1' "$CFGTXT"; then
+    echo "disable_splash=1" | $SUDO tee -a "$CFGTXT" >/dev/null   # hide the rainbow screen
+  fi
+}
+brand_boot || echo "   (boot screen setup skipped)"
 
 if [ $UPDATE = 0 ] && command -v raspi-config >/dev/null; then
   sudo raspi-config nonint do_boot_behaviour B4 || true   # desktop autologin

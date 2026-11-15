@@ -365,7 +365,6 @@ func statusJSON() -> Data {
     if !s.jobMode.isEmpty { fields.append(["Mode", s.jobMode]) }
     if s.jobLayers > 0 { fields.append(["Layers", "\(s.jobLayers)"]) }
     if let t = s.scanTime { fields.append(["Last bed scan", df.string(from: t)]) }
-    fields.append(["Bridge", MAC_NAME])
     var title: String
     var subtitle: String
     if CAPTURE {
@@ -380,7 +379,10 @@ func statusJSON() -> Data {
         } else {
             title = s.omniOnline == true ? "Connected to Mac" : "Not connected"
         }
-        subtitle = s.scan != nil ? "Latest bed scan" : "Run a bed scan in xTool Studio to see it here"
+        if s.preview != nil && s.scan != nil { subtitle = "Job preview · latest bed scan in the corner" }
+        else if s.preview != nil { subtitle = "Preview of the last job" }
+        else if s.scan != nil { subtitle = "Latest bed scan" }
+        else { subtitle = "Send a job from xTool Studio to see it here" }
     }
     var o: [String: Any] = [:]
     o["device_name"] = DEVICE_NAME

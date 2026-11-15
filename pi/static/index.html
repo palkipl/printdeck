@@ -71,20 +71,34 @@
   .layers{height:.9vh;border-radius:99px;background:var(--panel2);overflow:hidden}
   .layers div{height:100%;width:0;background:linear-gradient(90deg,var(--k2b),var(--k2));transition:width .8s}
 
-  /* ---------- omni ---------- */
-  .omni .cam{flex:0 0 auto;aspect-ratio:4/3}
-  .cam img.othumb{inset:auto;right:.8vw;bottom:.8vh;width:34%;height:42%;z-index:2;
-    background:#07090dd9;border:1px solid var(--line);border-radius:1vh;padding:.6vh}
-  .cam .otag{position:absolute;right:.8vw;bottom:calc(42% + 1.4vh);z-index:2;font-size:1.2vh;
-    color:var(--dim);background:#07090dd9;padding:.2vh .5vw;border-radius:99px}
-  .ofields{padding:1vh 1vw;display:flex;flex-direction:column;gap:.8vh;overflow:hidden}
-  .ofields .row{display:flex;justify-content:space-between;gap:1vw;font-size:1.7vh;padding:.7vh .8vw;
-    background:var(--panel2);border-radius:1vh}
-  .ofields .row span{color:var(--dim)} .ofields .row b{font-weight:650;text-align:right;
-    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .otitle{font-size:2vh;font-weight:700;padding:1vh 1vw 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .obar{margin:0 1vw;height:.9vh;border-radius:99px;background:var(--panel2);overflow:hidden}
+  /* ---------- omni (compact) ---------- */
+  .omni .cam{flex:0 0 auto;aspect-ratio:16/10;max-height:31vh}
+  .cam img.othumb{inset:auto;right:.6vw;bottom:.6vh;width:30%;height:44%;z-index:2;
+    background:#07090dd9;border:1px solid var(--line);border-radius:.9vh;padding:.4vh}
+  .cam .otag{position:absolute;right:.6vw;bottom:calc(44% + 1.1vh);z-index:2;font-size:1.1vh;
+    color:var(--dim);background:#07090dd9;padding:.15vh .5vw;border-radius:99px}
+  .obody{padding:.9vh .9vw;display:flex;flex-direction:column;gap:.9vh;min-height:0;overflow:hidden}
+  .otitle{font-size:1.9vh;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .osub{font-size:1.35vh;color:var(--dim);margin-top:.2vh;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .obar{height:.7vh;border-radius:99px;background:var(--panel2);overflow:hidden}
   .obar div{height:100%;width:0;background:var(--omni);transition:width .8s}
+  .sec{font-size:1.2vh;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;font-weight:600;
+    display:flex;justify-content:space-between}
+  .ink{display:flex;gap:.5vw;align-items:flex-end}
+  .tank{flex:1;display:flex;flex-direction:column;align-items:center;gap:.35vh;min-width:0}
+  .tube{width:100%;max-width:3.4vh;height:6.2vh;border-radius:.8vh;background:var(--panel2);
+    position:relative;overflow:hidden;box-shadow:inset 0 0 0 1px #ffffff14}
+  .tube .fill{position:absolute;left:0;right:0;bottom:0;transition:height .8s}
+  .tube .fill::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,#ffffff26,transparent 60%)}
+  .tank.low .tube{box-shadow:inset 0 0 0 2px var(--bad)}
+  .tank .pc{font-size:1.35vh;font-weight:700} .tank .nm{font-size:1.15vh;color:var(--dim);font-weight:600}
+  .tank.low .pc{color:var(--bad)}
+  .ink-empty{font-size:1.35vh;color:var(--faint);padding:.4vh 0}
+  .ofields{display:grid;grid-template-columns:1fr 1fr;gap:.6vh .6vw}
+  .ofields .row{background:var(--panel2);border-radius:.9vh;padding:.55vh .7vw;min-width:0}
+  .ofields .row span{display:block;font-size:1.15vh;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+  .ofields .row b{display:block;font-size:1.65vh;font-weight:650;margin-top:.15vh;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
   /* ---------- bottom strip ---------- */
   .strip{display:grid;grid-template-columns:1.5fr 1.35fr .9fr 1.5fr;gap:1.2vw}
@@ -186,9 +200,18 @@
       <span class="otag hidden" id="omni-tag">Job preview</span>
       <img id="omni-thumb" class="othumb hidden" alt="">
     </div>
-    <div class="otitle" id="omni-title"></div>
-    <div class="obar hidden" id="omni-barwrap" style="margin-top:.8vh"><div id="omni-bar"></div></div>
-    <div class="ofields" id="omni-fields"></div>
+    <div class="obody">
+      <div>
+        <div class="otitle" id="omni-title">—</div>
+        <div class="osub" id="omni-sub"></div>
+      </div>
+      <div class="obar hidden" id="omni-barwrap"><div id="omni-bar"></div></div>
+      <div>
+        <div class="sec"><span>Ink</span><span id="ink-when"></span></div>
+        <div class="ink" id="omni-ink" style="margin-top:.6vh"><div class="ink-empty">Waiting for ink levels…</div></div>
+      </div>
+      <div class="ofields" id="omni-fields"></div>
+    </div>
   </section>
 </main>
 
@@ -345,12 +368,30 @@ function renderK2(k2, cfg){
   $("led").className = "led" + (led ? " on" : ""); $("led").querySelector("span").textContent = led ? "LED on" : "LED off";
 
   const sp = spoolsFrom(r);
+  if (sp.filter(x => x.active).length !== 1) sp.forEach(x => x.active = false);   // ambiguous -> no highlight
   if (sp.length) $("spools").innerHTML = sp.slice(0, 9).map(s => `
     <div class="spool${s.active ? " active" : ""}">
       <div class="disc${s.empty ? " empty" : ""}" style="${s.color ? `background:${s.color}` : ""}"></div>
       <div class="ty">${esc(s.type || "—")}</div>
       <div class="id">${esc(s.id)}${s.percent !== null && s.percent >= 0 ? ` · ${s.percent}%` : ""}</div>
     </div>`).join("");
+}
+
+const INK_COLORS = {C:"#00aeef", M:"#ec008c", Y:"#ffe600", K:"#3a3a3a", W:"#f4f4f4", V:"#cfe8ff",
+  cyan:"#00aeef", magenta:"#ec008c", yellow:"#ffe600", black:"#3a3a3a", white:"#f4f4f4", varnish:"#cfe8ff", gloss:"#cfe8ff"};
+function renderInk(ink, when){
+  const box = $("omni-ink");
+  if (!Array.isArray(ink) || !ink.length){
+    box.innerHTML = `<div class="ink-empty">Ink levels not available yet</div>`; $("ink-when").textContent = ""; return;
+  }
+  box.innerHTML = ink.map(t => {
+    const p = Math.max(0, Math.min(100, num(t.percent) ?? 0));
+    const key = String(t.name || "").trim();
+    const col = color(t.color) || INK_COLORS[key] || INK_COLORS[key.toLowerCase()] || "#888";
+    return `<div class="tank${p < 15 ? " low" : ""}"><div class="tube"><div class="fill" style="height:${p}%;background:${col}"></div></div>
+      <div class="pc num">${Math.round(p)}%</div><div class="nm">${esc(key.slice(0, 3).toUpperCase())}</div></div>`;
+  }).join("");
+  $("ink-when").textContent = when || "";
 }
 
 function renderOmni(o){
@@ -360,7 +401,9 @@ function renderOmni(o){
   chip.className = "chip " + cls; chip.innerHTML = `<i></i>Omni · ${esc(label)}`;
   $("omni-state").className = "chip " + cls; $("omni-state").textContent = label;
   if (s.device_name) $("omni-name").textContent = s.device_name;
-  $("omni-title").textContent = o.connected ? (s.title || "") : "";
+  $("omni-title").textContent = o.connected ? (s.title || "—") : "Not connected";
+  $("omni-sub").textContent = o.connected ? (s.subtitle || "") : "Start PrintDeck Bridge on your Mac";
+  renderInk(o.connected ? s.ink : null, s.ink_time);
   const p = num(s.progress);
   $("omni-barwrap").classList.toggle("hidden", p === null);
   $("omni-bar").style.width = (p ?? 0) + "%";
@@ -385,7 +428,7 @@ function renderOmni(o){
     else { img.removeAttribute("src"); img.classList.add("hidden"); $("omni-msg").classList.remove("hidden");
       $("omni-msg").textContent = o.connected ? (s.subtitle || "No picture from the Mac yet") : "Start PrintDeck Bridge on your Mac"; }
   }
-  $("omni-fields").innerHTML = (o.connected ? (s.fields || []) : []).map(([l, v]) =>
+  $("omni-fields").innerHTML = (o.connected ? (s.fields || []).filter(([l]) => !["Bridge","Device"].includes(l)) : []).map(([l, v]) =>
     `<div class="row"><span>${esc(l)}</span><b>${esc(v)}</b></div>`).join("");
 }
 
