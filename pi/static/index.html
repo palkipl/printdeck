@@ -312,10 +312,20 @@ function renderK2(k2, cfg){
   $("k2-name").textContent = cfg.k2_name || "Creality K2 Combo";
   $("k2-ip").textContent = cfg.k2_ip || "";
 
-  if (k2.connected && camLoaded !== cfg.camera_mode){
-    const mj = cfg.camera_mode === "mjpeg";
-    $("k2-cam").innerHTML = `<div class="badge"><i></i>LIVE</div><iframe allow="autoplay" src="http://${location.hostname}:${cfg.go2rtc_port}/stream.html?src=${mj?"k2_mjpeg":"k2"}&mode=${mj?"mjpeg":"webrtc,mse"}"></iframe>`;
-    camLoaded = cfg.camera_mode;
+  // On the Pi screen use the light MJPEG stream (Pi 3 can't decode HD video smoothly);
+  // on a PC use the full-quality stream.
+  const onPi = document.body.classList.contains("kiosk");
+  const mode = onPi && cfg.pi_camera !== "webrtc" ? "lite" : cfg.camera_mode;
+  if (k2.connected && camLoaded !== mode){
+    const base = `http://${location.hostname}:${cfg.go2rtc_port}`;
+    if (mode === "lite"){
+      $("k2-cam").innerHTML = `<div class="badge"><i></i>LIVE</div><img id="k2-mjpeg" alt="" src="${base}/api/stream.mjpeg?src=k2_lite">`;
+      $("k2-mjpeg").onerror = () => { camLoaded = null; };         // retry on next tick
+    } else {
+      const mj = mode === "mjpeg";
+      $("k2-cam").innerHTML = `<div class="badge"><i></i>LIVE</div><iframe allow="autoplay" src="${base}/stream.html?src=${mj?"k2_mjpeg":"k2"}&mode=${mj?"mjpeg":"webrtc,mse"}"></iframe>`;
+    }
+    camLoaded = mode;
   }
 
   const code = Number(r.state);

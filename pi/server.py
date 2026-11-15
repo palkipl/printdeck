@@ -47,6 +47,7 @@ STATE = {
         "go2rtc_port": int(CFG.get("go2rtc_port", 1984)),
         "k2_ip": K2_IP,
         "k2_name": CFG.get("k2_name", "Creality K2 Combo"),
+        "pi_camera": CFG.get("pi_camera", "lite"),   # lite = small MJPEG on the Pi screen; webrtc = full HD
     },
 }
 THUMB = {"png": None, "file": None, "fetched": 0}

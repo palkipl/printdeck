@@ -26,7 +26,7 @@ fi
 K2IP="$(python3 -c "import json;print(json.load(open('$DIR/config.json'))['k2_ip'])")"
 
 # ---------- packages (also checked on auto-update, installs only what's missing) ----------
-PKGS="python3-aiohttp curl python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 \
+PKGS="python3-aiohttp curl ffmpeg python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 \
       gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav"
 [ -d /etc/xdg/labwc ] && PKGS="$PKGS swaybg"   # instant PrintDeck wallpaper at login
 MISSING=""
@@ -54,10 +54,12 @@ api:
   listen: ":1984"
   origin: "*"
 rtsp:
-  listen: ""
+  listen: "127.0.0.1:8554"   # local only - used internally to make the light k2_lite stream
 streams:
   k2: webrtc:http://$K2IP:8000/call/webrtc_local#format=creality
   k2_mjpeg: http://$K2IP:8080/?action=stream
+  # Light version for the Pi screen: small MJPEG, only runs while someone is watching
+  k2_lite: ffmpeg:k2#video=mjpeg#width=640#raw=-r 8 -q:v 7
 EOF
 
 # ---------- services ----------
