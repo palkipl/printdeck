@@ -1,0 +1,9 @@
+{
+  "k2_ip": "",
+  "k2_ws_port": 9999,
+  "camera_mode": "webrtc",
+  "go2rtc_port": 1984,
+  "dashboard_port": 5000,
+  "bridge_discovery_port": 47800,
+  "bridge_url": ""
+}
