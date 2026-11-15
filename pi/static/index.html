@@ -109,7 +109,7 @@
   .fan svg{width:5vh;height:5vh;flex:0 0 auto}
   .fan .fv{font-size:2vh;font-weight:750;line-height:1}
   .fan .fl{font-size:1.3vh;color:var(--dim)}
-  .spin{transform-origin:50% 50%;animation:spin linear infinite}
+  .spin{transform-origin:50% 50%;animation:spin linear infinite;will-change:transform}
   @keyframes spin{to{transform:rotate(360deg)}}
 
   .speed{display:flex;flex-direction:column;gap:.6vh}
@@ -231,6 +231,10 @@
 
 <script>
 const $ = id => document.getElementById(id);
+const _cache = {};
+function setHTML(id, html){ if (_cache["h:"+id] !== html){ _cache["h:"+id] = html; $(id).innerHTML = html; } }
+function setText(id, txt){ if (_cache["t:"+id] !== txt){ _cache["t:"+id] = txt; $(id).textContent = txt; } }
+function setStyle(id, prop, val){ const k="s:"+id+prop; if (_cache[k] !== val){ _cache[k] = val; $(id).style[prop] = val; } }
 if (new URLSearchParams(location.search).has("kiosk")) document.body.classList.add("kiosk");
 
 const STATES = {0:["Idle",""],1:["Printing","ok"],2:["Complete","ok"],3:["Failed","bad"],4:["Stopped","warn"],5:["Paused","warn"]};
@@ -355,8 +359,8 @@ function renderK2(k2, cfg){
   const fans = [["Model", pick(r,"modelFanPct","fan0Pct"), "#36d6a0"],
                 ["Case",  pick(r,"caseFanPct","fan2Pct"), "#5cc8ff"],
                 ["Side",  pick(r,"auxiliaryFanPct","sideFanPct","fan1Pct"), "#a98bff"]];
-  $("fans").innerHTML = fans.map(([n, v, c]) => { const p = Math.round(num(v) ?? 0);
-    return `<div class="fan">${fanSVG(p, c)}<div><div class="fv num">${v === undefined ? "—" : p+"%"}</div><div class="fl">${n}</div></div></div>`; }).join("");
+  setHTML("fans", fans.map(([n, v, c]) => { const p = Math.round(num(v) ?? 0);
+    return `<div class="fan">${fanSVG(p, c)}<div><div class="fv num">${v === undefined ? "—" : p+"%"}</div><div class="fl">${n}</div></div></div>`; }).join(""));
 
   const [mode, sub] = speedMode(pick(r, "curFeedratePct", "speedPct"));
   $("spd-mode").textContent = mode;
@@ -367,12 +371,12 @@ function renderK2(k2, cfg){
 
   const sp = spoolsFrom(r);
   if (sp.filter(x => x.active).length !== 1) sp.forEach(x => x.active = false);   // ambiguous -> no highlight
-  if (sp.length) $("spools").innerHTML = sp.slice(0, 9).map(s => `
+  if (sp.length) setHTML("spools", sp.slice(0, 9).map(s => `
     <div class="spool${s.active ? " active" : ""}">
       <div class="disc${s.empty ? " empty" : ""}" style="${s.color ? `background:${s.color}` : ""}"></div>
       <div class="ty">${esc(s.type || "—")}</div>
       <div class="id">${esc(s.id)}${s.percent !== null && s.percent >= 0 ? ` · ${s.percent}%` : ""}</div>
-    </div>`).join("");
+    </div>`).join(""));
 }
 
 function renderOmni(o){
@@ -408,8 +412,8 @@ function renderOmni(o){
     else { img.removeAttribute("src"); img.classList.add("hidden"); $("omni-msg").classList.remove("hidden");
       $("omni-msg").textContent = o.connected ? (s.subtitle || "No picture from the Mac yet") : "Start PrintDeck Bridge on your Mac"; }
   }
-  $("omni-fields").innerHTML = (o.connected ? (s.fields || []).filter(([l]) => !["Bridge","Device"].includes(l)) : []).map(([l, v]) =>
-    `<div class="row"><span>${esc(l)}</span><b>${esc(v)}</b></div>`).join("");
+  setHTML("omni-fields", (o.connected ? (s.fields || []).filter(([l]) => !["Bridge","Device"].includes(l)) : []).map(([l, v]) =>
+    `<div class="row"><span>${esc(l)}</span><b>${esc(v)}</b></div>`).join(""));
 }
 
 async function tick(){

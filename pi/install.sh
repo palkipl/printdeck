@@ -59,7 +59,7 @@ streams:
   k2: webrtc:http://$K2IP:8000/call/webrtc_local#format=creality
   k2_mjpeg: http://$K2IP:8080/?action=stream
   # Light version for the Pi screen: small MJPEG, only runs while someone is watching
-  k2_lite: ffmpeg:k2#video=mjpeg#width=640#raw=-r 8 -q:v 7
+  k2_lite: ffmpeg:k2#video=mjpeg#width=480#raw=-r 5 -q:v 8
 EOF
 
 # ---------- services ----------
