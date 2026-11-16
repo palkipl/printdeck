@@ -1,32 +1,36 @@
-// PrintDeck boot screen: logo + sliding loading bar
+// PrintDeck boot screen - identical to the desktop wallpaper and the app's loading
+// page (same picture, same bar, same place), so boot looks like one continuous screen.
 Window.SetBackgroundTopColor(0.027, 0.035, 0.051);
 Window.SetBackgroundBottomColor(0.027, 0.035, 0.051);
 
-logo.image = Image("logo.png");
-logo.sprite = Sprite(logo.image);
-logo.x = Window.GetX() + Window.GetWidth() / 2 - logo.image.GetWidth() / 2;
-logo.y = Window.GetY() + Window.GetHeight() / 2 - logo.image.GetHeight() / 2 - 20;
-logo.sprite.SetPosition(logo.x, logo.y, 1);
+W = Window.GetWidth();  H = Window.GetHeight();
+X0 = Window.GetX();     Y0 = Window.GetY();
 
-track.image = Image("track.png");
-track.sprite = Sprite(track.image);
-track.x = Window.GetX() + Window.GetWidth() / 2 - track.image.GetWidth() / 2;
-track.y = logo.y + logo.image.GetHeight() + 24;
-track.sprite.SetPosition(track.x, track.y, 2);
+// 16:9 picture, "fit" to the screen like swaybg -m fit / CSS contain
+stageW = W; stageH = W * 9 / 16;
+if (stageH > H) { stageH = H; stageW = H * 16 / 9; }
+stageX = X0 + (W - stageW) / 2;
+stageY = Y0 + (H - stageH) / 2;
 
-seg.image = Image("seg.png");
-seg.sprite = Sprite(seg.image);
-seg.range = track.image.GetWidth() - seg.image.GetWidth();
-seg.sprite.SetPosition(track.x, track.y, 3);
+bg = Image("wallpaper.png").Scale(Math.Int(stageW), Math.Int(stageH));
+bgs = Sprite(bg); bgs.SetPosition(stageX, stageY, 1);
+
+// loading bar: 19% wide, at 71% down, same as loading.html
+barW = Math.Int(stageW * 0.19);
+barH = Math.Int(stageH * 0.0075); if (barH < 5) barH = 5;
+barX = stageX + (stageW - barW) / 2;
+barY = stageY + stageH * 0.71;
+track = Sprite(Image("track.png").Scale(barW, barH)); track.SetPosition(barX, barY, 2);
+segW = Math.Int(barW * 0.35);
+seg = Sprite(Image("seg.png").Scale(segW, barH)); seg.SetPosition(barX, barY, 3);
+range = barW - segW;
 
 t = 0;
 fun refresh_callback() {
-  t = t + 0.06;
-  pos = (1 - Math.Cos(t)) / 2;            // smooth back-and-forth 0..1
-  seg.sprite.SetX(track.x + seg.range * pos);
+  t = t + 0.05;                               // ~1.3 s each way, like the loading page
+  pos = (1 - Math.Cos(t)) / 2;
+  seg.SetX(barX + range * pos);
 }
 Plymouth.SetRefreshFunction(refresh_callback);
-
-// Hide password/question prompts' default text clutter (none expected on a Pi)
 fun message_callback(text) { }
 Plymouth.SetMessageFunction(message_callback);

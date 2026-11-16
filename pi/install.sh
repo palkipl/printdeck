@@ -179,7 +179,7 @@ brand_boot() {
   local CMD=/boot/firmware/cmdline.txt
   [ -f "$CMD" ] || CMD=/boot/cmdline.txt
   if [ -f "$CMD" ]; then
-    for opt in quiet splash logo.nologo vt.global_cursor_default=0; do
+    for opt in quiet splash logo.nologo vt.global_cursor_default=0 loglevel=3 systemd.show_status=false rd.udev.log_level=3; do
       grep -qE "(^| )$opt( |\$)" "$CMD" || $SUDO sed -i "1 s/\$/ $opt/" "$CMD"
     done
   fi

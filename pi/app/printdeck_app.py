@@ -18,6 +18,11 @@ GLib.set_prgname("printdeck")   # taskbar/menu icon matching (StartupWMClass=pri
 
 DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOADING = "file://" + os.path.join(DIR, "static", "loading.html")
+WALLPAPER = os.path.join(DIR, "branding", "wallpaper.png")
+# Hides the mouse in every page and frame (camera player included)
+HIDE_CURSOR = WebKit2.UserStyleSheet(
+    "*, *:hover { cursor: none !important; }",
+    WebKit2.UserContentInjectedFrames.ALL_FRAMES, WebKit2.UserStyleLevel.USER, None, None)
 ICON = os.path.join(DIR, "branding", "icon.png")
 BG = Gdk.RGBA()
 BG.parse("#07090d")
@@ -39,7 +44,10 @@ class PrintDeck(Gtk.Application):
         if os.path.exists(ICON):
             win.set_icon_from_file(ICON)
         css = Gtk.CssProvider()
-        css.load_from_data(b"window { background-color: #07090d; }")
+        css.load_from_data((
+            "window { background-color: #07090d; background-image: url('file://%s');"
+            " background-position: center; background-size: contain; background-repeat: no-repeat; }"
+            % WALLPAPER).encode())
         Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), css,
                                                  Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
@@ -56,23 +64,35 @@ class PrintDeck(Gtk.Application):
             except TypeError:
                 pass  # older WebKit without WebRTC
 
-        view = WebKit2.WebView()
+        self.ucm = WebKit2.UserContentManager()
+        view = WebKit2.WebView.new_with_user_content_manager(self.ucm)
         view.set_settings(s)
-        view.set_background_color(BG)
+        clear = Gdk.RGBA(); clear.parse("rgba(0,0,0,0)")
+        view.set_background_color(clear)      # see-through until the page paints
         view.connect("web-process-terminated", lambda v, r: GLib.timeout_add_seconds(2, self.reload))
         view.connect("context-menu", lambda *a: True)          # no right-click menu
         view.load_uri(LOADING)
 
         win.add(view)
         win.connect("key-press-event", self.on_key)
-        win.show_all()
-        if self.start_fullscreen:
-            win.fullscreen()
         self.win, self.view, self.is_full = win, view, self.start_fullscreen
+        if self.start_fullscreen:
+            win.fullscreen()                  # go full screen before the first frame is shown
+            self.cursor(True)
+        win.show_all()
         win.connect("window-state-event", self.on_state)
 
     def on_state(self, win, event):
-        self.is_full = bool(event.new_window_state & Gdk.WindowState.FULLSCREEN)
+        full = bool(event.new_window_state & Gdk.WindowState.FULLSCREEN)
+        if full != self.is_full:
+            self.is_full = full
+            self.cursor(full)
+
+    def cursor(self, hide):
+        """Hide the mouse while full screen, show it again in a normal window."""
+        self.ucm.remove_all_style_sheets()
+        if hide:
+            self.ucm.add_style_sheet(HIDE_CURSOR)
 
     def reload(self):
         self.view.load_uri(LOADING)
