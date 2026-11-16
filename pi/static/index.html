@@ -102,7 +102,16 @@
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
   /* ---------- bottom strip ---------- */
-  .strip{display:grid;grid-template-columns:1.5fr 1.35fr .9fr 1.5fr;gap:1.2vw}
+  /* Temperatures with Filament underneath; Fans and Speed span both rows */
+  .strip{display:grid;grid-template-columns:1.6fr 1.25fr .9fr;gap:1vh 1.2vw;
+    grid-template-areas:"temp fans speed" "fil fans speed"}
+  .g-temp{grid-area:temp} .g-fil{grid-area:fil} .g-fans{grid-area:fans} .g-speed{grid-area:speed}
+  .g-fans .row3{flex:1;align-items:center}
+  .g-fans .fan{flex-direction:column;text-align:center;gap:.8vh}
+  .g-fans .fanico{width:7.5vh;height:7.5vh}
+  .g-fans .fv{font-size:2.4vh}
+  .g-speed .mode{font-size:3vh;margin-top:auto}
+  .g-speed .led{margin-top:.8vh;margin-bottom:auto}
   .group{background:var(--panel);border:1px solid var(--line);border-radius:1.6vh;padding:1vh 1vw;
     display:flex;flex-direction:column;gap:.8vh;min-width:0}
   .group h4{font-size:1.3vh;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;font-weight:600}
@@ -214,7 +223,7 @@
 
 <!-- bottom strip -->
 <div class="strip">
-  <div class="group">
+  <div class="group g-temp">
     <h4>Temperatures</h4>
     <div class="row3">
       <div class="temp"><div class="cur num" id="t-noz">—</div><div class="lab"><span>Nozzle</span><span id="t-noz-t"></span></div><div class="tbar"><div id="b-noz" style="background:var(--hot)"></div></div></div>
@@ -222,17 +231,17 @@
       <div class="temp"><div class="cur num" id="t-box">—</div><div class="lab"><span>Chamber</span><span id="t-box-t"></span></div><div class="tbar"><div id="b-box" style="background:var(--box)"></div></div></div>
     </div>
   </div>
-  <div class="group">
+  <div class="group g-fans">
     <h4>Fans</h4>
     <div class="row3" id="fans"></div>
   </div>
-  <div class="group speed">
+  <div class="group speed g-speed">
     <h4>Speed</h4>
     <div class="mode" id="spd-mode">—</div>
     <div class="sub num" id="spd-sub"></div>
     <div class="led" id="led"><i></i><span>LED</span></div>
   </div>
-  <div class="group">
+  <div class="group g-fil">
     <h4>Filament</h4>
     <div class="spools" id="spools"><span class="muted">No CFS data yet</span></div>
   </div>
