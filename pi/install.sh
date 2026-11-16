@@ -26,7 +26,7 @@ fi
 K2IP="$(python3 -c "import json;print(json.load(open('$DIR/config.json'))['k2_ip'])")"
 
 # ---------- packages (also checked on auto-update, installs only what's missing) ----------
-PKGS="python3-aiohttp curl ffmpeg python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 \
+PKGS="python3-aiohttp curl python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1 \
       gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav"
 [ -d /etc/xdg/labwc ] && PKGS="$PKGS swaybg"   # instant PrintDeck wallpaper at login
 MISSING=""
@@ -36,31 +36,6 @@ if [ -n "$MISSING" ]; then
   $SUDO apt-get update -q
   $SUDO apt-get install -y $MISSING
 fi
-
-# ---------- go2rtc ----------
-if [ $UPDATE = 0 ] || [ ! -x "$DIR/go2rtc" ]; then
-  echo "-> Downloading go2rtc (camera re-streamer)"
-  case "$(uname -m)" in
-    aarch64) GARCH=arm64 ;; armv7l) GARCH=arm ;; armv6l) GARCH=armv6 ;; x86_64) GARCH=amd64 ;;
-    *) echo "Unknown CPU $(uname -m)"; exit 1 ;;
-  esac
-  # Download to a temp file and swap it in - works even while go2rtc is running
-  curl -fL -o "$DIR/go2rtc.new" "https://github.com/AlexxIT/go2rtc/releases/latest/download/go2rtc_linux_$GARCH"
-  chmod +x "$DIR/go2rtc.new"
-  mv -f "$DIR/go2rtc.new" "$DIR/go2rtc"
-fi
-cat > "$DIR/go2rtc.yaml" <<EOF
-api:
-  listen: ":1984"
-  origin: "*"
-rtsp:
-  listen: "127.0.0.1:8554"   # local only - used internally to make the light k2_lite stream
-streams:
-  k2: webrtc:http://$K2IP:8000/call/webrtc_local#format=creality
-  k2_mjpeg: http://$K2IP:8080/?action=stream
-  # Light version for the Pi screen: small MJPEG, only runs while someone is watching
-  k2_lite: ffmpeg:k2#video=mjpeg#width=480#raw=-r 5 -q:v 8
-EOF
 
 # ---------- services ----------
 echo "-> Writing background services"
@@ -78,19 +53,12 @@ RestartSec=3
 WantedBy=multi-user.target
 EOF
 
-$SUDO tee /etc/systemd/system/printdeck-go2rtc.service >/dev/null <<EOF
-[Unit]
-Description=PrintDeck camera re-streamer (go2rtc)
-After=network.target
-[Service]
-User=$ME
-WorkingDirectory=$DIR
-ExecStart=$DIR/go2rtc -config $DIR/go2rtc.yaml
-Restart=always
-RestartSec=3
-[Install]
-WantedBy=multi-user.target
-EOF
+# No live camera any more: remove the old camera re-streamer
+if [ -f /etc/systemd/system/printdeck-go2rtc.service ]; then
+  $SUDO systemctl disable --now printdeck-go2rtc.service >/dev/null 2>&1 || true
+  $SUDO rm -f /etc/systemd/system/printdeck-go2rtc.service
+fi
+rm -f "$DIR/go2rtc" "$DIR/go2rtc.yaml"
 
 # Update watcher: checks GitHub every 2 s, reboots after installing an update
 $SUDO tee /etc/systemd/system/printdeck-watch.service >/dev/null <<EOF
@@ -112,8 +80,8 @@ if [ -f /etc/systemd/system/printdeck-update.timer ]; then
 fi
 
 $SUDO systemctl daemon-reload
-$SUDO systemctl enable printdeck.service printdeck-go2rtc.service printdeck-watch.service >/dev/null
-$SUDO systemctl restart printdeck.service printdeck-go2rtc.service
+$SUDO systemctl enable printdeck.service printdeck-watch.service >/dev/null
+$SUDO systemctl restart printdeck.service
 # Don't restart the watcher from inside itself (it's the one running this update)
 if [ $UPDATE = 1 ]; then systemctl is-active --quiet printdeck-watch.service || $SUDO systemctl start printdeck-watch.service
 else $SUDO systemctl restart printdeck-watch.service; fi

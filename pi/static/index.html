@@ -59,6 +59,12 @@
   .ring .val{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
   .ring .val b{font-size:4.2vh;font-weight:800;line-height:1}
   .ring .val span{font-size:1.4vh;color:var(--dim);margin-top:.4vh}
+  .bigprev{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(circle at 50% 45%,#1d2534,#0b0e14 70%);position:relative}
+  .bigprev img{width:86%;height:86%;object-fit:contain;image-rendering:auto;filter:drop-shadow(0 2vh 3vh #0009)}
+  .bigprev span{font-size:2vh;color:var(--faint)}
+  .bigprev .idle-ico{font-size:5vh;font-weight:800;color:var(--faint);letter-spacing:.15em;text-transform:uppercase}
+  .herotxt{min-width:0}
   .thumb{width:100%;aspect-ratio:1;max-height:17vh;border-radius:1.2vh;overflow:hidden;
     background:radial-gradient(circle at 50% 40%,#1d2534,#0d1118);display:flex;align-items:center;justify-content:center}
   .thumb img{width:100%;height:100%;object-fit:contain}
@@ -144,10 +150,10 @@
 </div>
 
 <main>
-  <!-- K2 camera -->
+  <!-- K2 preview of what's printing (no live video) -->
   <section class="panel">
     <div class="ptitle"><strong id="k2-name">Creality K2 Combo</strong><span class="num" id="k2-ip"></span></div>
-    <div class="cam" id="k2-cam"><div class="msg">Waiting for camera…</div></div>
+    <div class="bigprev" id="thumb"><span>No preview</span></div>
   </section>
 
   <!-- K2 job -->
@@ -166,9 +172,11 @@
           </svg>
           <div class="val"><b class="num" id="pct">0%</b><span id="ring-sub">idle</span></div>
         </div>
-        <div class="thumb" id="thumb"><span>No preview</span></div>
+        <div class="herotxt">
+          <div class="fname" id="fname">Nothing printing</div>
+          <div class="muted" id="hero-sub" style="margin-top:.6vh"></div>
+        </div>
       </div>
-      <div class="fname" id="fname">Nothing printing</div>
       <div>
         <div class="muted num" id="layer-txt" style="display:flex;justify-content:space-between">
           <span>Layer —</span><span></span></div>
@@ -307,46 +315,7 @@ function renderK2(k2, cfg){
 
   // On the Pi screen use the light MJPEG stream (Pi 3 can't decode HD video smoothly);
   // on a PC use the full-quality stream.
-  const onPi = document.body.classList.contains("kiosk");
-  // Pi app: native <video> player (falls back to the light MJPEG stream if it can't play).
-  // PC browser: go2rtc's player.
-  let camMode = onPi ? (camForce || cfg.pi_camera || "video") : cfg.camera_mode;
-  if (camMode === "webrtc" && onPi) camMode = "video";
-  if (onPi && MAC_CAM && cfg.use_mac_camera !== false && Date.now() > macCamBadUntil) camMode = "mac";
-  if (k2.connected && camLoaded !== camMode){
-    const base = `http://${location.hostname}:${cfg.go2rtc_port}`;
-    if (camMode === "mac"){
-      $("k2-cam").innerHTML = `<div class="badge"><i></i>LIVE</div><img id="k2-mac" alt="" src="${MAC_CAM}">`;
-      // Mac stream failed -> use the Pi's own player for 60 s, then try the Mac again
-      $("k2-mac").onerror = () => { macCamBadUntil = Date.now() + 60000; camLoaded = null;
-        $("k2-cam").innerHTML = `<div class="msg">Camera reconnecting…</div>`; };
-    } else if (camMode === "video"){
-      $("k2-cam").innerHTML = `<div class="badge"><i></i>LIVE</div><video id="k2-video" autoplay muted playsinline src="${base}/api/stream.mp4?src=k2"></video>`;
-      const v = $("k2-video");
-      const fallback = () => { if (camLoaded === "video"){ camForce = "lite"; camLoaded = null; } };
-      v.onerror = fallback;
-      const t = setTimeout(() => { if (!(v.currentTime > 0)) fallback(); }, 15000);
-      v.onplaying = () => clearTimeout(t);
-      // Keep it live by playing a little faster when behind. (Never seek: jumping to a
-      // non-keyframe is what causes green smearing.) Only reload if hopelessly behind.
-      v.ontimeupdate = () => {
-        const b = v.buffered; if (!b.length) return;
-        const lag = b.end(b.length-1) - v.currentTime;
-        v.playbackRate = lag > 1.5 ? 1.15 : 1.0;
-        if (lag > 15) camLoaded = null;      // restart cleanly from a keyframe
-      };
-    } else if (camMode === "lite"){
-      $("k2-cam").innerHTML = `<div class="badge"><i></i>LIVE</div><img id="k2-mjpeg" alt="" src="${base}/api/stream.mjpeg?src=k2_lite">`;
-      $("k2-mjpeg").onerror = () => {
-        $("k2-cam").innerHTML = `<div class="msg">Camera reconnecting…</div>`;
-        setTimeout(() => { camLoaded = null; }, 5000);
-      };
-    } else {
-      const mj = camMode === "mjpeg";
-      $("k2-cam").innerHTML = `<div class="badge"><i></i>LIVE</div><iframe allow="autoplay" src="${base}/stream.html?src=${mj?"k2_mjpeg":"k2"}&mode=${mj?"mjpeg":"webrtc,mse"}"></iframe>`;
-    }
-    camLoaded = camMode;
-  }
+
 
   const code = Number(r.state);
   const active = [1,5].includes(code);           // printing or paused
@@ -362,6 +331,8 @@ function renderK2(k2, cfg){
                          : (done ? "Finished: " : "") + (file || "Unknown file");
 
   const layer = num(r.layer), total = num(r.TotalLayer);
+  $("hero-sub").textContent = idle ? (k2.connected ? "Ready for the next print" : "")
+    : done ? "Print complete" : (num(r.printLeftTime) ? dur(r.printLeftTime) + " left" : "");
   $("layer-txt").innerHTML = !idle && total ? `<span>Layer ${layer ?? 0} / ${total}</span><span>${Math.round((layer||0)/total*100)}%</span>` : "<span>Layer —</span><span></span>";
   $("layer-bar").style.width = !idle && total ? ((layer||0)/total*100) + "%" : "0";
 
@@ -411,9 +382,6 @@ function renderK2(k2, cfg){
 }
 
 function renderOmni(o){
-  const kc = o.connected && o.status && o.status.k2_camera;
-  const macCam = kc ? `${o.bridge.replace(/:\d+$/, "")}:${kc.port}${kc.path}` : null;
-  if (macCam !== MAC_CAM){ MAC_CAM = macCam; camLoaded = null; }
   const s = o.status || {}, chip = $("omni-chip");
   const label = !o.bridge ? "waiting for Mac" : !o.connected ? "bridge offline" : (s.state || "online");
   const cls = !o.bridge ? "" : !o.connected ? "bad" : ({good:"omni", warn:"warn", bad:"bad"}[s.state_color] || "omni");
