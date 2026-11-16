@@ -10,6 +10,12 @@ if [ -n "$DISPLAY" ] && command -v xset >/dev/null; then
   xset s off; xset -dpms; xset s noblank
 fi
 
+# "pi_decoder": "software" in config.json avoids the Pi's hardware video decoder
+DEC="$(python3 -c "import json;print(json.load(open('$DIR/config.json')).get('pi_decoder','auto'))" 2>/dev/null)"
+if [ "$DEC" = "software" ]; then
+  export GST_PLUGIN_FEATURE_RANK="v4l2h264dec:NONE,v4l2slh264dec:NONE"
+fi
+
 if python3 -c "import gi; gi.require_version('WebKit2','4.1')" 2>/dev/null; then
   while true; do
     python3 "$DIR/app/printdeck_app.py"

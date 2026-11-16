@@ -53,6 +53,9 @@ struct Snapshot {
     var windowTitle = ""
     var omniOnline: Bool?
     var usbName = ""
+    var omniUSB = false
+    var omniNet: Bool?        // nil = no IP known yet
+    var omniIP = ""
     // From xTool Studio's own files
     var preview: Data?        // PNG of the last job sent to the Omni
     var previewVer = 0
@@ -269,20 +272,52 @@ final class OmniChecker {
     private let q = DispatchQueue(label: "printdeck.omni")
     private let ports: [NWEndpoint.Port] = [28900, 8080, 80, 443]
 
+    // Checks USB and (if an IP is set) the network, so it works either way.
     func start() {
-        if OMNI_IP.isEmpty { q.async { self.checkUSB() } }   // Omni plugged in by USB
-        else { q.async { self.check() } }                    // Omni on the network
+        q.async { self.checkUSB() }
+        q.async { self.check() }
+    }
+
+    /// Finds the Omni's address from xTool Studio's own connection to it (port 28900).
+    private func detectIP() -> String {
+        if !OMNI_IP.isEmpty { return OMNI_IP }
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+        p.arguments = ["-nP", "-iTCP:28900", "-sTCP:ESTABLISHED"]
+        let pipe = Pipe(); p.standardOutput = pipe; p.standardError = FileHandle.nullDevice
+        guard (try? p.run()) != nil else { return "" }
+        p.waitUntilExit()
+        let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        for line in out.split(separator: "\n") {
+            guard let arrow = line.range(of: "->") else { continue }
+            let remote = line[arrow.upperBound...].split(separator: " ").first.map(String.init) ?? ""
+            let ip = remote.split(separator: ":").first.map(String.init) ?? ""
+            if !ip.isEmpty && !ip.hasPrefix("172.25.4.") { return ip }   // 172.25.4.x = the USB link
+        }
+        return ""
+    }
+
+    private func combine(_ s: inout Snapshot) {
+        s.omniOnline = s.omniUSB || (s.omniNet ?? false)
     }
 
     private func checkUSB() {
         // xTool devices report as Makeblock ("makeblock_cm") over USB
         let keys = Set([USB_MATCH, "makeblock", "xtool"])
         let hit = listUSBDevices().first { d in keys.contains { d.lowercased().contains($0) } }
-        shared.update { $0.omniOnline = hit != nil; $0.usbName = hit ?? "" }
+        shared.update { $0.omniUSB = hit != nil; $0.usbName = hit ?? ""; self.combine(&$0) }
         q.asyncAfter(deadline: .now() + 3) { self.checkUSB() }
     }
 
     private func check() {
+        let found = detectIP()
+        let ip = found.isEmpty ? shared.get().omniIP : found
+        guard !ip.isEmpty else {
+            shared.update { $0.omniNet = nil; self.combine(&$0) }
+            q.asyncAfter(deadline: .now() + 10) { self.check() }
+            return
+        }
+        shared.update { $0.omniIP = ip }
         var resolved = false
         var failed = Set<Int>()
         var conns: [NWConnection] = []
@@ -290,11 +325,11 @@ final class OmniChecker {
             if resolved { return }
             resolved = true
             conns.forEach { $0.cancel() }
-            shared.update { $0.omniOnline = ok }
+            shared.update { $0.omniNet = ok; self.combine(&$0) }
             self.q.asyncAfter(deadline: .now() + 5) { self.check() }
         }
         for (i, p) in ports.enumerated() {
-            let c = NWConnection(host: NWEndpoint.Host(OMNI_IP), port: p, using: .tcp)
+            let c = NWConnection(host: NWEndpoint.Host(ip), port: p, using: .tcp)
             c.stateUpdateHandler = { st in
                 switch st {
                 case .ready: finish(true)
@@ -347,18 +382,16 @@ func statusJSON() -> Data {
     let fresh = s.jpeg != nil && Date().timeIntervalSince(s.lastFrame) < 10
     var state = "Online", color = "good"
     if !s.permission { state = "Needs permission"; color = "bad" }
-    else if s.omniOnline == false { state = OMNI_IP.isEmpty ? "Omni unplugged" : "Omni offline"; color = "bad" }
+    else if s.omniOnline == false { state = "Omni offline"; color = "bad" }
     else if CAPTURE && !s.studioOpen { state = "Studio closed"; color = "warn" }
 
     var fields: [[String]] = []
-    if OMNI_IP.isEmpty {
-        let o = s.omniOnline.map { $0 ? "Connected" : "Not plugged in" } ?? "Checking…"
-        fields.append(["Omni USB", o])
-    } else {
-        let o = s.omniOnline.map { $0 ? "Online" : "Offline" } ?? "Checking…"
-        fields.append(["Omni", o])
-        fields.append(["Omni IP", OMNI_IP])
-    }
+    var how: [String] = []
+    if s.omniNet == true { how.append("Network") }
+    if s.omniUSB { how.append("USB") }
+    let conn = s.omniOnline == nil ? "Checking…" : how.isEmpty ? "Offline" : "Connected · " + how.joined(separator: " + ")
+    fields.append(["Omni", conn])
+    if !s.omniIP.isEmpty { fields.append(["Omni IP", s.omniIP]) }
     if CAPTURE { fields.append(["xTool Studio", s.studioOpen ? "Open" : "Closed"]) }
     let df = DateFormatter(); df.dateFormat = "MMM d, h:mm a"
     if let t = s.jobTime { fields.append(["Last job sent", df.string(from: t)]) }
@@ -544,10 +577,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         else if !s.permission { statusLine.title = "⚠️ Needs Screen Recording permission" }
         else if s.studioOpen { statusLine.title = "● Streaming xTool Studio on port \(HTTP_PORT)" }
         else { statusLine.title = "○ xTool Studio not open" }
-        if OMNI_IP.isEmpty {
-            omniLine.title = "Omni USB: " + (s.omniOnline.map { $0 ? "connected (\(s.usbName))" : "not found" } ?? "checking…")
-        }
-        else { omniLine.title = "Omni \(OMNI_IP): " + (s.omniOnline.map { $0 ? "online" : "offline" } ?? "checking…") }
+        let net = s.omniIP.isEmpty ? "not found yet" : "\(s.omniIP) " + (s.omniNet.map { $0 ? "online" : "offline" } ?? "checking…")
+        omniLine.title = "Omni · network: \(net) · USB: \(s.omniUSB ? "yes" : "no")"
     }
 
     @objc func openPreview() { NSWorkspace.shared.open(URL(string: "http://localhost:\(HTTP_PORT)")!) }

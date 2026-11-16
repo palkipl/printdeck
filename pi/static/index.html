@@ -319,8 +319,14 @@ function renderK2(k2, cfg){
       v.onerror = fallback;
       const t = setTimeout(() => { if (!(v.currentTime > 0)) fallback(); }, 15000);
       v.onplaying = () => clearTimeout(t);
-      // keep it live: if it falls behind, jump to the newest frame
-      v.ontimeupdate = () => { const b = v.buffered; if (b.length && b.end(b.length-1) - v.currentTime > 2.5) v.currentTime = b.end(b.length-1) - 0.3; };
+      // Keep it live by playing a little faster when behind. (Never seek: jumping to a
+      // non-keyframe is what causes green smearing.) Only reload if hopelessly behind.
+      v.ontimeupdate = () => {
+        const b = v.buffered; if (!b.length) return;
+        const lag = b.end(b.length-1) - v.currentTime;
+        v.playbackRate = lag > 1.5 ? 1.15 : 1.0;
+        if (lag > 15) camLoaded = null;      // restart cleanly from a keyframe
+      };
     } else if (camMode === "lite"){
       $("k2-cam").innerHTML = `<div class="badge"><i></i>LIVE</div><img id="k2-mjpeg" alt="" src="${base}/api/stream.mjpeg?src=k2_lite">`;
       $("k2-mjpeg").onerror = () => { camLoaded = null; };
