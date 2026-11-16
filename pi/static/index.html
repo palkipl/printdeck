@@ -35,7 +35,7 @@
   .clock{font-size:2.6vh;font-weight:700} .date{font-size:1.5vh;color:var(--dim);text-align:right}
 
   /* ---------- main grid ---------- */
-  main{display:grid;grid-template-columns:1.75fr 1fr;gap:1.2vw;min-height:0}
+  main{display:grid;grid-template-columns:1fr 1fr;gap:1.2vw;min-height:0}
   .k2body{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;gap:1vw;padding:0 1vw 1.2vh 0}
   .k2body .job{padding:0}
   .k2body .bigprev{border-radius:0 1.2vh 1.2vh 0}
@@ -78,7 +78,7 @@
   .kv{display:grid;grid-template-columns:1fr 1fr;gap:.8vh .8vw}
   .kv div{background:var(--panel2);border-radius:1vh;padding:.8vh .8vw;min-width:0}
   .kv .l{font-size:1.3vh;color:var(--dim);text-transform:uppercase;letter-spacing:.07em}
-  .kv .v{font-size:2.2vh;font-weight:700;margin-top:.2vh;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .kv .v{font-size:2.1vh;font-weight:700;margin-top:.2vh;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .layers{height:.9vh;border-radius:99px;background:var(--panel2);overflow:hidden}
   .layers div{height:100%;width:0;background:linear-gradient(90deg,var(--k2b),var(--k2));transition:width .8s}
 
@@ -103,7 +103,7 @@
 
   /* ---------- bottom strip ---------- */
   /* Temperatures with Filament underneath; Fans and Speed span both rows */
-  .strip{display:grid;grid-template-columns:1.6fr 1.25fr .9fr;gap:1vh 1.2vw;
+  .strip{display:grid;grid-template-columns:2fr 1.2fr .8fr;column-gap:1.2vw;row-gap:1vh;
     grid-template-areas:"temp fans speed" "fil fans speed"}
   .g-temp{grid-area:temp} .g-fil{grid-area:fil} .g-fans{grid-area:fans} .g-speed{grid-area:speed}
   .g-fans .row3{flex:1;align-items:center}
@@ -286,6 +286,13 @@ function fanSVG(pct, col, name){
     <img src="/static/fans/${gif}.gif" alt=""></span>`;
 }
 
+// "6:35 PM" if today, "Mon 6:35p" otherwise (fits narrow boxes)
+function finishText(d){
+  const t = d.toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
+  if (d.toDateString() === new Date().toDateString()) return t;
+  return d.toLocaleDateString([], {weekday:"short"}) + " " + t.replace(/\s?([AP])M$/i, (m, a) => a.toLowerCase());
+}
+
 function speedMode(p){
   p = num(p); if (p === null) return ["—",""];
   const map = {50:"Stable", 100:"Standard", 125:"Ultrafast"};
@@ -349,8 +356,7 @@ function renderK2(k2, cfg){
   const left = num(r.printLeftTime);
   $("left").textContent = active ? dur(left) : "—";
   $("elap").textContent = active ? dur(r.printJobTime) : "—";
-  $("eta").textContent = active && left ? new Date(Date.now()+left*1000)
-      .toLocaleString([], {weekday:"short", hour:"numeric", minute:"2-digit"}) : done ? "Done" : "—";
+  $("eta").textContent = active && left ? finishText(new Date(Date.now()+left*1000)) : done ? "Done" : "—";
   const w = num(pick(r, "materialWeight", "printFileWeight", "fileWeight", "estimatedWeight", "usedMaterialWeight"));
   const len = num(pick(r, "usedMaterialLength"));
   $("weight").textContent = idle ? "—" : w !== null ? `${w.toFixed(1)} g` : len !== null ? `${(len/1000).toFixed(2)} m` : "—";
