@@ -293,6 +293,7 @@ function spoolsFrom(r){
   return out;
 }
 
+let MAC_CAM = null;   // light K2 stream made by the Mac (set from the Omni bridge status)
 function renderK2(k2, cfg){
   const r = k2.raw || {};
   const st = STATES[r.state] || ["Online",""];
@@ -310,9 +311,13 @@ function renderK2(k2, cfg){
   // PC browser: go2rtc's player.
   let camMode = onPi ? (camForce || cfg.pi_camera || "video") : cfg.camera_mode;
   if (camMode === "webrtc" && onPi) camMode = "video";
+  if (onPi && MAC_CAM && cfg.use_mac_camera !== false) camMode = "mac";    // Mac does the video work
   if (k2.connected && camLoaded !== camMode){
     const base = `http://${location.hostname}:${cfg.go2rtc_port}`;
-    if (camMode === "video"){
+    if (camMode === "mac"){
+      $("k2-cam").innerHTML = `<div class="badge"><i></i>LIVE</div><img id="k2-mac" alt="" src="${MAC_CAM}">`;
+      $("k2-mac").onerror = () => { MAC_CAM = null; camLoaded = null; };   // Mac gone -> Pi's own player
+    } else if (camMode === "video"){
       $("k2-cam").innerHTML = `<div class="badge"><i></i>LIVE</div><video id="k2-video" autoplay muted playsinline src="${base}/api/stream.mp4?src=k2"></video>`;
       const v = $("k2-video");
       const fallback = () => { if (camLoaded === "video"){ camForce = "lite"; camLoaded = null; } };
@@ -400,6 +405,9 @@ function renderK2(k2, cfg){
 }
 
 function renderOmni(o){
+  const kc = o.connected && o.status && o.status.k2_camera;
+  const macCam = kc ? `${o.bridge.replace(/:\d+$/, "")}:${kc.port}${kc.path}` : null;
+  if (macCam !== MAC_CAM){ MAC_CAM = macCam; camLoaded = null; }
   const s = o.status || {}, chip = $("omni-chip");
   const label = !o.bridge ? "waiting for Mac" : !o.connected ? "bridge offline" : (s.state || "online");
   const cls = !o.bridge ? "" : !o.connected ? "bad" : ({good:"omni", warn:"warn", bad:"bad"}[s.state_color] || "omni");

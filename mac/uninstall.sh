@@ -7,3 +7,5 @@ rm -f "$HOME/Library/LaunchAgents/com.printdeck.updater.plist" "$HOME/Library/La
 rm -rf "$HOME/Applications/PrintDeck Bridge.app" "$HOME/Library/Application Support/PrintDeck"
 security delete-certificate -c "PrintDeck Signing" >/dev/null 2>&1
 echo "PrintDeck Bridge removed."
+
+pkill -f "Application Support/PrintDeck/go2rtc" 2>/dev/null

@@ -200,7 +200,9 @@ async def omni_loop(app):
             url = STATE["omni"]["bridge"]
             if url:
                 try:
-                    async with session.get(url + "/status.json", timeout=ClientTimeout(total=3)) as r:
+                    # tell the Mac the K2's IP so it can relay the camera for us
+                    async with session.get(url + "/status.json", params={"k2": K2_IP},
+                                           timeout=ClientTimeout(total=3)) as r:
                         STATE["omni"]["status"] = await r.json(content_type=None)
                         STATE["omni"]["connected"] = True
                         STATE["omni"]["last_rx"] = time.time()

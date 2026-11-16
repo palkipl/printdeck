@@ -61,6 +61,26 @@ curl -fsSL "$RAW/update.sh" -o "$SUPPORT/update.sh"
 curl -fsSL "$RAW/uninstall.sh" -o "$SUPPORT/uninstall.sh"
 chmod +x "$SUPPORT/update.sh" "$SUPPORT/uninstall.sh"
 
+# ---------- camera relay tools (go2rtc + ffmpeg) for the K2 camera ----------
+ARCH="$(uname -m)"; [ "$ARCH" = "x86_64" ] && GARCH=amd64 || GARCH=arm64
+if [ ! -x "$SUPPORT/go2rtc" ] || [ "$UPDATE" != 1 ]; then
+  echo "-> Downloading go2rtc (K2 camera relay)"
+  curl -fsSL -o "$TMP/go2rtc.zip" "https://github.com/AlexxIT/go2rtc/releases/latest/download/go2rtc_mac_$GARCH.zip" &&
+  unzip -o -q "$TMP/go2rtc.zip" -d "$TMP/g2" &&
+  mv -f "$(find "$TMP/g2" -type f -name 'go2rtc*' | head -1)" "$SUPPORT/go2rtc.new" &&
+  chmod +x "$SUPPORT/go2rtc.new" && mv -f "$SUPPORT/go2rtc.new" "$SUPPORT/go2rtc" ||
+  echo "   (go2rtc download failed - K2 camera relay disabled)"
+fi
+if ! command -v ffmpeg >/dev/null && [ ! -x /opt/homebrew/bin/ffmpeg ] && [ ! -x "$SUPPORT/ffmpeg" ]; then
+  echo "-> Downloading ffmpeg (K2 camera relay)"
+  if [ "$GARCH" = arm64 ]; then FURL="https://ffmpeg.martin-riedl.de/redirect/latest/macos/arm64/release/ffmpeg.zip"
+  else FURL="https://ffmpeg.martin-riedl.de/redirect/latest/macos/amd64/release/ffmpeg.zip"; fi
+  curl -fsSL -o "$TMP/ffmpeg.zip" "$FURL" &&
+  unzip -o -q "$TMP/ffmpeg.zip" -d "$TMP/ff" &&
+  mv -f "$(find "$TMP/ff" -type f -name ffmpeg | head -1)" "$SUPPORT/ffmpeg" && chmod +x "$SUPPORT/ffmpeg" ||
+  echo "   (ffmpeg download failed - install it with 'brew install ffmpeg' to enable the K2 camera relay)"
+fi
+
 echo "-> Compiling PrintDeck Bridge (takes ~30 s)"
 xcrun swiftc -O -swift-version 5 -target "$(uname -m)-apple-macos14.0" \
   "$TMP/main.swift" -o "$TMP/PrintDeckBridge"

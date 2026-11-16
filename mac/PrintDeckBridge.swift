@@ -346,6 +346,82 @@ final class OmniChecker {
     }
 }
 
+// MARK: - K2 camera relay (Mac does the heavy video work for the Pi) ---------
+
+let RELAY_PORT = 1984
+final class CameraRelay {
+    private let q = DispatchQueue(label: "printdeck.relay")
+    private var proc: Process?
+    private var k2IP = ""
+    private var wanted = false
+    private(set) var running = false
+
+    private var go2rtcPath: String { supportDir.appendingPathComponent("go2rtc").path }
+    private var ffmpegPath: String {
+        for p in [supportDir.appendingPathComponent("ffmpeg").path, "/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"]
+            where FileManager.default.isExecutableFile(atPath: p) { return p }
+        return ""
+    }
+    var available: Bool { FileManager.default.isExecutableFile(atPath: go2rtcPath) && !ffmpegPath.isEmpty }
+
+    /// Called with the K2 IP the Pi reports. (Re)starts go2rtc when it changes.
+    func setK2(_ ip: String) {
+        q.async {
+            guard self.available, !ip.isEmpty, ip.allSatisfy({ $0.isNumber || $0 == "." }), ip != self.k2IP else { return }
+            self.k2IP = ip
+            self.restart()
+        }
+    }
+
+    private func writeConfig() -> URL {
+        let yaml = """
+        api:
+          listen: ":\(RELAY_PORT)"
+          origin: "*"
+        rtsp:
+          listen: "127.0.0.1:18554"
+        webrtc:
+          listen: ""
+        ffmpeg:
+          bin: "\(ffmpegPath)"
+        log:
+          level: warn
+        streams:
+          k2: webrtc:http://\(k2IP):8000/call/webrtc_local#format=creality
+          k2_pi: ffmpeg:k2#video=mjpeg#width=800#raw=-r 10 -q:v 5
+        """
+        let url = supportDir.appendingPathComponent("go2rtc.yaml")
+        try? yaml.write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
+
+    private func restart() {
+        wanted = true
+        if let p = proc, p.isRunning { p.terminationHandler = nil; p.terminate() }
+        let cfg = writeConfig()
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: go2rtcPath)
+        p.arguments = ["-config", cfg.path]
+        p.currentDirectoryURL = supportDir
+        let log = supportDir.appendingPathComponent("camera.log")
+        FileManager.default.createFile(atPath: log.path, contents: nil)
+        if let h = try? FileHandle(forWritingTo: log) { p.standardOutput = h; p.standardError = h }
+        p.terminationHandler = { [weak self] _ in
+            guard let self = self else { return }
+            self.q.async {
+                self.running = false
+                if self.wanted { self.q.asyncAfter(deadline: .now() + 3) { self.restart() } }
+            }
+        }
+        do { try p.run(); proc = p; running = true } catch { running = false }
+    }
+
+    func stop() {
+        q.sync { wanted = false; proc?.terminate() }
+    }
+}
+let relay = CameraRelay()
+
 // MARK: - Discovery broadcast -----------------------------------------------
 
 func sendBroadcast() {
@@ -428,6 +504,7 @@ func statusJSON() -> Data {
     o["bridge_version"] = VERSION
     if s.scan != nil { o["image"] = "/scan.jpg?v=\(s.scanVer)" }
     if s.preview != nil { o["thumb"] = "/preview.png?v=\(s.previewVer)" }
+    if relay.running { o["k2_camera"] = ["port": RELAY_PORT, "path": "/api/stream.mjpeg?src=k2_pi"] }
     return (try? JSONSerialization.data(withJSONObject: o)) ?? Data("{}".utf8)
 }
 
@@ -486,6 +563,8 @@ func handle(_ c: NWConnection) {
         guard let data = data, let req = String(data: data, encoding: .utf8) else { c.cancel(); return }
         let target = req.split(separator: " ").dropFirst().first.map(String.init) ?? "/"
         let path = target.split(separator: "?").first.map(String.init) ?? "/"
+        if let qs = URLComponents(string: "http://x" + target)?.queryItems,
+           let k2 = qs.first(where: { $0.name == "k2" })?.value { relay.setK2(k2) }
         switch path {
         case "/status.json": respond(c, "200 OK", "application/json", statusJSON())
         case "/stream.mjpg": streamMJPEG(c)
@@ -553,6 +632,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(item("Quit", #selector(quit), key: "q"))
         statusItem.menu = menu
 
+        // clean up a camera relay left over from a crash (it would hold the port)
+        let k = Process(); k.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
+        k.arguments = ["-f", "Application Support/PrintDeck/go2rtc"]; try? k.run(); k.waitUntilExit()
         listener = startHTTP()
         if CAPTURE {
             if !CGPreflightScreenCaptureAccess() { _ = CGRequestScreenCaptureAccess() }
@@ -587,7 +669,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     @objc func openUSB() { NSWorkspace.shared.open(URL(string: "http://localhost:\(HTTP_PORT)/usb.json")!) }
     @objc func openConfig() { NSWorkspace.shared.open(supportDir) }
-    @objc func quit() { NSApp.terminate(nil) }
+    @objc func quit() { relay.stop(); NSApp.terminate(nil) }
+    func applicationWillTerminate(_ notification: Notification) { relay.stop() }
 }
 
 let app = NSApplication.shared
