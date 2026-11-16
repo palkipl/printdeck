@@ -294,6 +294,7 @@ function spoolsFrom(r){
 }
 
 let MAC_CAM = null;   // light K2 stream made by the Mac (set from the Omni bridge status)
+let macCamBadUntil = 0;   // after a failure, skip the Mac stream for a while
 function renderK2(k2, cfg){
   const r = k2.raw || {};
   const st = STATES[r.state] || ["Online",""];
@@ -311,12 +312,14 @@ function renderK2(k2, cfg){
   // PC browser: go2rtc's player.
   let camMode = onPi ? (camForce || cfg.pi_camera || "video") : cfg.camera_mode;
   if (camMode === "webrtc" && onPi) camMode = "video";
-  if (onPi && MAC_CAM && cfg.use_mac_camera !== false) camMode = "mac";    // Mac does the video work
+  if (onPi && MAC_CAM && cfg.use_mac_camera !== false && Date.now() > macCamBadUntil) camMode = "mac";
   if (k2.connected && camLoaded !== camMode){
     const base = `http://${location.hostname}:${cfg.go2rtc_port}`;
     if (camMode === "mac"){
       $("k2-cam").innerHTML = `<div class="badge"><i></i>LIVE</div><img id="k2-mac" alt="" src="${MAC_CAM}">`;
-      $("k2-mac").onerror = () => { MAC_CAM = null; camLoaded = null; };   // Mac gone -> Pi's own player
+      // Mac stream failed -> use the Pi's own player for 60 s, then try the Mac again
+      $("k2-mac").onerror = () => { macCamBadUntil = Date.now() + 60000; camLoaded = null;
+        $("k2-cam").innerHTML = `<div class="msg">Camera reconnecting…</div>`; };
     } else if (camMode === "video"){
       $("k2-cam").innerHTML = `<div class="badge"><i></i>LIVE</div><video id="k2-video" autoplay muted playsinline src="${base}/api/stream.mp4?src=k2"></video>`;
       const v = $("k2-video");
@@ -334,7 +337,10 @@ function renderK2(k2, cfg){
       };
     } else if (camMode === "lite"){
       $("k2-cam").innerHTML = `<div class="badge"><i></i>LIVE</div><img id="k2-mjpeg" alt="" src="${base}/api/stream.mjpeg?src=k2_lite">`;
-      $("k2-mjpeg").onerror = () => { camLoaded = null; };
+      $("k2-mjpeg").onerror = () => {
+        $("k2-cam").innerHTML = `<div class="msg">Camera reconnecting…</div>`;
+        setTimeout(() => { camLoaded = null; }, 5000);
+      };
     } else {
       const mj = camMode === "mjpeg";
       $("k2-cam").innerHTML = `<div class="badge"><i></i>LIVE</div><iframe allow="autoplay" src="${base}/stream.html?src=${mj?"k2_mjpeg":"k2"}&mode=${mj?"mjpeg":"webrtc,mse"}"></iframe>`;

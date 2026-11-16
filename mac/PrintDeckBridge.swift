@@ -278,35 +278,39 @@ final class OmniChecker {
         q.async { self.check() }
     }
 
-    /// Finds the Omni's address from xTool Studio's own connection to it (port 28900).
+    /// Finds the Omni's address from xTool Studio's own network connections.
+    /// First choice: Studio's connection on port 28900 (xTool's device port).
+    /// Otherwise: any local-network address that an xTool Studio process is talking to.
     private func detectIP() -> String {
         if !OMNI_IP.isEmpty { return OMNI_IP }
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
-        p.arguments = ["-nP", "-iTCP:28900", "-sTCP:ESTABLISHED"]
-        let pipe = Pipe(); p.standardOutput = pipe; p.standardError = FileHandle.nullDevice
-        guard (try? p.run()) != nil else { return "" }
-        p.waitUntilExit()
-        let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-        for line in out.split(separator: "\n") {
-            guard let arrow = line.range(of: "->") else { continue }
+        func lsof(_ args: [String]) -> [String] {
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+            p.arguments = args
+            let pipe = Pipe(); p.standardOutput = pipe; p.standardError = FileHandle.nullDevice
+            guard (try? p.run()) != nil else { return [] }
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            p.waitUntilExit()
+            return (String(data: data, encoding: .utf8) ?? "").split(separator: "\n").map(String.init)
+        }
+        func remoteIP(_ line: String) -> String {
+            guard let arrow = line.range(of: "->") else { return "" }
             let remote = line[arrow.upperBound...].split(separator: " ").first.map(String.init) ?? ""
-            let ip = remote.split(separator: ":").first.map(String.init) ?? ""
-            if !ip.isEmpty && !ip.hasPrefix("172.25.4.") { return ip }   // 172.25.4.x = the USB link
+            return remote.split(separator: ":").first.map(String.init) ?? ""
+        }
+        func isLAN(_ ip: String) -> Bool {
+            if ip.hasPrefix("172.25.4.") { return false }          // the USB link
+            if ip.hasPrefix("192.168.") || ip.hasPrefix("10.") { return true }
+            let p = ip.split(separator: ".").compactMap { Int($0) }
+            return p.count == 4 && p[0] == 172 && (16...31).contains(p[1])
+        }
+        for l in lsof(["-nP", "-iTCP:28900", "-sTCP:ESTABLISHED"]) {
+            let ip = remoteIP(l); if isLAN(ip) { return ip }
+        }
+        for l in lsof(["-nP", "-a", "-c", "xTool", "-iTCP", "-sTCP:ESTABLISHED"]) {
+            let ip = remoteIP(l); if isLAN(ip) { return ip }
         }
         return ""
-    }
-
-    private func combine(_ s: inout Snapshot) {
-        s.omniOnline = s.omniUSB || (s.omniNet ?? false)
-    }
-
-    private func checkUSB() {
-        // xTool devices report as Makeblock ("makeblock_cm") over USB
-        let keys = Set([USB_MATCH, "makeblock", "xtool"])
-        let hit = listUSBDevices().first { d in keys.contains { d.lowercased().contains($0) } }
-        shared.update { $0.omniUSB = hit != nil; $0.usbName = hit ?? ""; self.combine(&$0) }
-        q.asyncAfter(deadline: .now() + 3) { self.checkUSB() }
     }
 
     private func check() {
@@ -458,6 +462,7 @@ func statusJSON() -> Data {
     let fresh = s.jpeg != nil && Date().timeIntervalSince(s.lastFrame) < 10
     var state = "Online", color = "good"
     if !s.permission { state = "Needs permission"; color = "bad" }
+    else if s.omniOnline == false && s.omniIP.isEmpty { state = "Omni not found"; color = "warn" }
     else if s.omniOnline == false { state = "Omni offline"; color = "bad" }
     else if CAPTURE && !s.studioOpen { state = "Studio closed"; color = "warn" }
 
@@ -465,7 +470,9 @@ func statusJSON() -> Data {
     var how: [String] = []
     if s.omniNet == true { how.append("Network") }
     if s.omniUSB { how.append("USB") }
-    let conn = s.omniOnline == nil ? "Checking…" : how.isEmpty ? "Offline" : "Connected · " + how.joined(separator: " + ")
+    let conn = s.omniOnline == nil ? "Checking…"
+             : !how.isEmpty ? "Connected · " + how.joined(separator: " + ")
+             : s.omniIP.isEmpty ? "Not found (connect it in xTool Studio)" : "Offline"
     fields.append(["Omni", conn])
     if !s.omniIP.isEmpty { fields.append(["Omni IP", s.omniIP]) }
     if CAPTURE { fields.append(["xTool Studio", s.studioOpen ? "Open" : "Closed"]) }
