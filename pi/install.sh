@@ -92,31 +92,31 @@ RestartSec=3
 WantedBy=multi-user.target
 EOF
 
-$SUDO tee /etc/systemd/system/printdeck-update.service >/dev/null <<EOF
+# Update watcher: checks GitHub every 2 s, reboots after installing an update
+$SUDO tee /etc/systemd/system/printdeck-watch.service >/dev/null <<EOF
 [Unit]
-Description=PrintDeck auto-updater
-After=network-online.target
-Wants=network-online.target
+Description=PrintDeck update watcher (checks every 2 s, reboots on update)
+After=network.target
 [Service]
-Type=oneshot
 User=$ME
-ExecStart=/bin/bash $DIR/update.sh
-EOF
-
-$SUDO tee /etc/systemd/system/printdeck-update.timer >/dev/null <<EOF
-[Unit]
-Description=Check GitHub for PrintDeck updates every 30 minutes
-[Timer]
-OnBootSec=3min
-OnUnitActiveSec=30min
+ExecStart=/bin/bash $DIR/watch.sh
+Restart=always
+RestartSec=5
 [Install]
-WantedBy=timers.target
+WantedBy=multi-user.target
 EOF
+# remove the old 30-minute timer
+if [ -f /etc/systemd/system/printdeck-update.timer ]; then
+  $SUDO systemctl disable --now printdeck-update.timer >/dev/null 2>&1 || true
+  $SUDO rm -f /etc/systemd/system/printdeck-update.timer /etc/systemd/system/printdeck-update.service
+fi
 
 $SUDO systemctl daemon-reload
-$SUDO systemctl enable printdeck.service printdeck-go2rtc.service printdeck-update.timer >/dev/null
+$SUDO systemctl enable printdeck.service printdeck-go2rtc.service printdeck-watch.service >/dev/null
 $SUDO systemctl restart printdeck.service printdeck-go2rtc.service
-$SUDO systemctl start printdeck-update.timer
+# Don't restart the watcher from inside itself (it's the one running this update)
+if [ $UPDATE = 1 ]; then systemctl is-active --quiet printdeck-watch.service || $SUDO systemctl start printdeck-watch.service
+else $SUDO systemctl restart printdeck-watch.service; fi
 
 # ---------- app launcher + kiosk on login ----------
 chmod +x "$DIR"/*.sh

@@ -5,7 +5,7 @@ Full-screen dashboard for a **Creality K2 Combo** and an **xTool O1 Omni**.
 - **Raspberry Pi** (`pi/`): web server + full-screen app on boot. Shows the K2's live camera, print thumbnail, progress, layers, ETA, temps, fans, speed mode, LED and CFS filament, plus the Omni panel.
 - **Mac** (`mac/`): *PrintDeck Bridge*, a menu-bar app that starts at login, streams the xTool Studio window, checks the Omni is plugged in over USB, and is found by the Pi automatically.
 
-Both sides **auto-update from this repo every 30 minutes**.
+The Pi checks this repo **every 2 seconds** and reboots after installing an update; the Mac auto-updates every 30 minutes.
 
 ## Raspberry Pi (Raspberry Pi OS with Desktop)
 
@@ -17,7 +17,7 @@ curl -fsSL https://raw.githubusercontent.com/palkipl/printdeck/main/setup.sh | b
 - On the Pi: the PrintDeck app (GTK + WebKit, no Chromium) starts full screen at login. **Esc** = leave full screen, **F11** = full screen, **Ctrl+Q** = quit, Menu → **PrintDeck** reopens it
 - Settings: `~/printdeck/config.json`, then `sudo systemctl restart printdeck`
 - Fan animation speed: `"fan_animation": "slow"` (or `"slower"`, `"off"`) in `~/printdeck/config.json`
-- Logs: `journalctl -u printdeck -f` · Update now: `bash ~/printdeck/update.sh`
+- Logs: `journalctl -u printdeck -f` · Update now: `bash ~/printdeck/update.sh` · Watcher log: `journalctl -u printdeck-watch -f`
 - All raw K2 data: `http://<pi-ip>:5000/api/raw`
 
 ## Mac (macOS 14 Sonoma or newer)

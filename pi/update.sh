@@ -5,7 +5,7 @@ main() {
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="palkipl/printdeck"
 LATEST="$(curl -fsSL "https://api.github.com/repos/$REPO/commits?path=pi&per_page=1" | grep -m1 '"sha"' | cut -d'"' -f4)"
-if [ -z "$LATEST" ]; then echo "Can't reach GitHub - will try later"; exit 0; fi
+if [ -z "$LATEST" ]; then echo "Can't reach GitHub - will try later"; exit 1; fi
 CURRENT="$(cat "$DIR/.version" 2>/dev/null)"
 if [ "$LATEST" = "$CURRENT" ]; then echo "Up to date (${CURRENT:0:7})"; exit 0; fi
 
@@ -17,5 +17,10 @@ cp -r "$TMP/pi/." "$DIR/"          # config.json, go2rtc and go2rtc.yaml are not
 rm -rf "$TMP"
 echo "$LATEST" > "$DIR/.version"
 bash "$DIR/install.sh" --update
+if [ "$1" = "--reboot" ]; then
+  echo "Update installed - rebooting the Pi"
+  sync
+  sudo -n /sbin/reboot || sudo -n systemctl reboot || echo "Couldn't reboot (sudo needs a password) - services were restarted instead"
+fi
 }
 main "$@"; exit
